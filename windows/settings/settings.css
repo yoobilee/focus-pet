@@ -1,0 +1,121 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  background: #fbf9f6;
+  color: #2e2a26;
+}
+
+header {
+  padding: 18px 22px 10px;
+  border-bottom: 1px solid #eee2d5;
+}
+
+header h1 {
+  font-size: 17px;
+  margin: 0;
+}
+
+main {
+  padding: 14px 22px 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8a7a63;
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+
+.char-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.char-btn {
+  flex: 1;
+  font-size: 26px;
+  padding: 8px 0;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  background: #f2e9dc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.char-btn.selected {
+  border-color: #e8a95a;
+  background: #fdeecb;
+}
+
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-row, .checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+input[type="number"], select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2d5c2;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 22px 18px;
+  border-top: 1px solid #eee2d5;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button.primary {
+  background: #e8a95a;
+  color: #fff;
+}
+
+button.secondary {
+  background: #eee2d5;
+  color: #6b5a45;
+}
+
+#interval-section.hidden,
+#idle-section.hidden {
+  display: none;
+}

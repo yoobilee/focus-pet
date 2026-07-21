@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>FocusPet 설정</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <header>
+    <h1>🐾 FocusPet 설정</h1>
+  </header>
+
+  <main>
+    <section>
+      <label class="section-title">캐릭터</label>
+      <div id="char-grid" class="char-grid"></div>
+    </section>
+
+    <section>
+      <label class="section-title">언제 알려줄까요?</label>
+      <div class="mode-options">
+        <label class="radio-row"><input type="radio" name="mode" value="interval" /> 고정 간격 (뽀모도로 스타일 — 강의 시청 등 입력이 적은 작업에 적합)</label>
+        <label class="radio-row"><input type="radio" name="mode" value="idle" /> 활동 감지 (키보드·마우스 입력이 없을 때만)</label>
+        <label class="radio-row"><input type="radio" name="mode" value="both" /> 둘 다 사용</label>
+      </div>
+    </section>
+
+    <section id="interval-section">
+      <label class="section-title">알림 간격 (분)</label>
+      <input type="number" id="intervalMinutes" min="1" max="180" />
+    </section>
+
+    <section id="idle-section">
+      <label class="section-title">입력 없음 감지 기준 (초)</label>
+      <input type="number" id="idleThresholdSeconds" min="5" max="1800" />
+    </section>
+
+    <section>
+      <label class="section-title">펫 위치</label>
+      <select id="position">
+        <option value="bottom-right">오른쪽 아래</option>
+        <option value="bottom-left">왼쪽 아래</option>
+        <option value="top-right">오른쪽 위</option>
+        <option value="top-left">왼쪽 위</option>
+      </select>
+    </section>
+
+    <section>
+      <label class="checkbox-row"><input type="checkbox" id="soundEnabled" /> 알림 소리 재생</label>
+    </section>
+
+    <section>
+      <label class="section-title">알림 메시지 (한 줄에 하나씩)</label>
+      <textarea id="messages" rows="5"></textarea>
+    </section>
+  </main>
+
+  <footer>
+    <button id="resetBtn" class="secondary">기본값으로</button>
+    <button id="saveBtn" class="primary">저장</button>
+  </footer>
+
+  <script src="settings.js"></script>
+</body>
+</html>
