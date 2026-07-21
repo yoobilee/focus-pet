@@ -19,13 +19,14 @@
   - 활동 감지: `powerMonitor.getSystemIdleTime()`을 5초마다 폴링, threshold 넘으면 1회 알림 (재알림은 다시 활동 후 idle 재진입 시)
   - `both` 모드는 두 타이머를 동시에 돌림
 - **설정 저장**: `electron-store` 같은 외부 라이브러리 없이 `app.getPath('userData')/settings.json`에 직접 JSON 읽기/쓰기 (`settingsStore.js`)
-- **펫 창** (`windows/pet/`): frameless, transparent, `focusable:false`, 이모지 기반 캐릭터 (이미지 에셋 없이 가볍게). 말풍선은 CSS opacity transition, 효과음은 외부 mp3 없이 Web Audio API 오실레이터로 생성
+- **펫 창** (`windows/pet/`): frameless, transparent, `focusable:false`. 이모지 대신 도트(픽셀아트) 스타일 PNG 스프라이트 사용 (`assets/sprites/{character}_A.png` / `_B.png`, PIL로 생성한 24x20 그리드 각진 스타일, `image-rendering: pixelated`로 렌더링). 창 자체를 가로로 넓게(460x210) 만들어서 그 안에서 좌우로 걸어다니는 patrol 애니메이션 구현 (`requestAnimationFrame`으로 위치 이동 + 다리 프레임 A/B 교차, 방향 전환 시 `scaleX(-1)`로 좌우 반전, 가장자리 도달 시 랜덤하게 잠깐 멈췄다 반대로 이동). 말풍선은 펫을 따라다니도록 pet-wrap의 자식으로 배치, 알림 뜨는 동안은 걷기 일시정지. 효과음은 외부 mp3 없이 Web Audio API 오실레이터로 생성. 설정 톱니바퀴 버튼은 펫 위치와 무관하게 창 우상단에 고정.
 - **설정 창** (`windows/settings/`): 캐릭터 선택 그리드, 모드 라디오 버튼, 간격/threshold 입력, 위치 select, 메시지 textarea
 
 ## 알려진 한계 / 다음에 다듬을 것
 - 다중 모니터 처리 안 됨 (항상 `getPrimaryDisplay()` 기준)
 - 펫 창 위치가 화면 크기 바뀌거나 모니터 구성 바뀔 때 재계산 안 됨
-- 캐릭터가 이모지라 OS/폰트에 따라 렌더링이 조금씩 다르게 보일 수 있음 → 실제 스프라이트/GIF로 바꾸려면 `#pet-char`를 `<img>`로 교체하고 애니메이션 프레임 로직 추가 필요
+- 스프라이트가 걷기 2프레임(A/B)만 있어서 정지 상태 전용 idle 포즈는 없음 (정지할 때 그냥 A프레임 사용)
+- 걷기 패턴이 일정 구간(창 폭 460px 내부)을 왕복하는 것뿐이라 방 전체를 자유롭게 돌아다니는 느낌은 아님 — 원하면 창 폭 자체를 더 넓히거나(예: 화면 하단 전체 폭) 세로 이동(점프 등) 추가 가능
 - 시작 프로그램 자동 등록 기능 없음 (수동으로 `npm start` 또는 빌드 후 실행)
 - 펫 창이 `focusable:false`라 드래그 이동이 잘 안 될 수 있음 (프레임리스+투명 창의 드래그 리전 이슈는 OS별로 다르게 동작하는 경우가 많음 — 테스트 필요)
 - idle 감지에서 화면보호기/잠금 상태와의 상호작용 미검증

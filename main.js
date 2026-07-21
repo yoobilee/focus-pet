@@ -12,7 +12,7 @@ let intervalTimer = null;
 let idlePollTimer = null;
 let wasIdle = false; // tracks whether we've already fired a reminder for the current idle stretch
 
-const PET_SIZE = { width: 220, height: 220 };
+const PET_SIZE = { width: 460, height: 210 };
 
 function getPetPosition(display) {
   const { workArea } = display;

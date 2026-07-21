@@ -45,13 +45,22 @@ section {
 
 .char-btn {
   flex: 1;
-  font-size: 26px;
   padding: 8px 0;
   border-radius: 12px;
   border: 2px solid transparent;
   background: #f2e9dc;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-btn img {
+  width: 44px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .char-btn.selected {

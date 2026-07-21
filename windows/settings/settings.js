@@ -1,10 +1,5 @@
-const CHARACTERS = {
-  cat: '🐱',
-  dog: '🐶',
-  rabbit: '🐰',
-  panda: '🐼',
-  hamster: '🐹'
-};
+const CHARACTERS = ['cat', 'dog', 'rabbit', 'panda', 'hamster'];
+const SPRITE_BASE = '../../assets/sprites';
 
 const charGrid = document.getElementById('char-grid');
 const intervalSection = document.getElementById('interval-section');
@@ -21,12 +16,15 @@ let currentCharacter = 'cat';
 
 function buildCharGrid() {
   charGrid.innerHTML = '';
-  Object.entries(CHARACTERS).forEach(([key, emoji]) => {
+  CHARACTERS.forEach((key) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'char-btn';
     btn.dataset.key = key;
-    btn.textContent = emoji;
+    const img = document.createElement('img');
+    img.src = `${SPRITE_BASE}/${key}_A.png`;
+    img.alt = key;
+    btn.appendChild(img);
     btn.addEventListener('click', () => {
       currentCharacter = key;
       updateCharSelection();
