@@ -39,28 +39,37 @@ section {
 }
 
 .char-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
 .char-btn {
-  flex: 1;
-  padding: 8px 0;
+  padding: 6px 4px 8px;
   border-radius: 12px;
   border: 2px solid transparent;
   background: #f2e9dc;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
 }
 
-.char-btn img {
-  width: 44px;
-  height: auto;
+.char-btn canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: block;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.char-label {
+  font-size: 10.5px;
+  color: #6b5a45;
+  font-weight: 600;
 }
 
 .char-btn.selected {

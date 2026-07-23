@@ -7,7 +7,12 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "test:invariants": "node test/sim-invariants.mjs",
+    "test:movement-stats": "node test/sim-movement-stats.mjs",
+    "test:render-poses": "node test/render-poses.mjs",
+    "test:rotation-debug": "node test/sim-rotation-debug.mjs",
+    "test:idle-rhythm": "node test/sim-idle-rhythm.mjs"
   },
   "devDependencies": {
     "electron": "^31.0.0",
@@ -17,7 +22,8 @@
     "appId": "com.yoobi.focuspet",
     "productName": "FocusPet",
     "files": [
-      "**/*"
+      "**/*",
+      "!test/**"
     ],
     "win": {
       "target": "nsis",

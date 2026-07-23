@@ -1,5 +1,4 @@
-const CHARACTERS = ['cat', 'dog', 'rabbit', 'panda', 'hamster'];
-const SPRITE_BASE = '../../assets/sprites';
+import { createAnimal, GRID_W, GRID_H, PX, CHARACTERS } from '../shared/animal-engine.js';
 
 const charGrid = document.getElementById('char-grid');
 const intervalSection = document.getElementById('interval-section');
@@ -12,24 +11,38 @@ const messagesTextarea = document.getElementById('messages');
 const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
 
-let currentCharacter = 'cat';
+let currentCharacter = 'cat_a';
+
+function renderCharThumb(canvas, key) {
+  canvas.width = GRID_W * PX;
+  canvas.height = GRID_H * PX;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const anim = createAnimal(key);
+  anim.draw(ctx);
+}
 
 function buildCharGrid() {
   charGrid.innerHTML = '';
-  CHARACTERS.forEach((key) => {
+  CHARACTERS.forEach(({ key, label }) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'char-btn';
     btn.dataset.key = key;
-    const img = document.createElement('img');
-    img.src = `${SPRITE_BASE}/${key}_A.png`;
-    img.alt = key;
-    btn.appendChild(img);
+
+    const canvas = document.createElement('canvas');
+    btn.appendChild(canvas);
+    const span = document.createElement('span');
+    span.className = 'char-label';
+    span.textContent = label;
+    btn.appendChild(span);
+
     btn.addEventListener('click', () => {
       currentCharacter = key;
       updateCharSelection();
     });
     charGrid.appendChild(btn);
+    requestAnimationFrame(() => renderCharThumb(canvas, key));
   });
 }
 

@@ -2,8 +2,28 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
+// Legacy keys from earlier character rosters - mapped to their closest
+// surviving equivalent so an existing settings.json doesn't just silently
+// fall back to the default character after a roster change.
+const LEGACY_CHARACTER_MAP = {
+  cat: 'cat_a',
+  rabbit: 'rabbit_b',
+  cat_b: 'cat_tuxedo',
+  rabbit_a: 'rabbit_b',
+  rabbit_c: 'rabbit_b',
+  panda: 'hamster',
+  dog: 'dog_dachshund',
+  dog_pug: 'dog_pomeranian',
+};
+
+const VALID_CHARACTERS = new Set([
+  'cat_a', 'cat_tuxedo', 'cat_calico', 'cat_siamese',
+  'dog_dachshund', 'dog_corgi', 'dog_husky', 'dog_pomeranian',
+  'rabbit_b', 'hamster',
+]);
+
 const DEFAULTS = {
-  character: 'cat',        // cat | dog | rabbit | panda | hamster
+  character: 'cat_a',      // cat_a | cat_tuxedo | cat_calico | cat_siamese | dog_dachshund | dog_corgi | dog_husky | dog_pomeranian | rabbit_b | hamster
   mode: 'interval',        // interval | idle | both
   intervalMinutes: 25,
   idleThresholdSeconds: 90,
@@ -29,6 +49,12 @@ function load() {
     if (fs.existsSync(file)) {
       const raw = fs.readFileSync(file, 'utf-8');
       const parsed = JSON.parse(raw);
+      if (parsed.character && LEGACY_CHARACTER_MAP[parsed.character]) {
+        parsed.character = LEGACY_CHARACTER_MAP[parsed.character];
+      }
+      if (!VALID_CHARACTERS.has(parsed.character)) {
+        parsed.character = DEFAULTS.character;
+      }
       return { ...DEFAULTS, ...parsed };
     }
   } catch (e) {
