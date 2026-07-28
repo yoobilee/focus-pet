@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>FocusPet 3D Voxel Prototype</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #2a6b3a; overflow: hidden; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+  </style>
+  <!-- Import map so the browser's native ES module loader can resolve the
+       bare "three" specifier to the actual installed package file - no
+       bundler step, consistent with this project's "no build step"
+       convention (see CLAUDE.md). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "../../node_modules/three/build/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <script type="module" src="pet3d.js"></script>
+</body>
+</html>

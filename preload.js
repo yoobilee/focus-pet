@@ -12,5 +12,10 @@ contextBridge.exposeInMainWorld('focusPetAPI', {
   onReminder: (callback) => ipcRenderer.on('reminder', (_event, data) => callback(data)),
   onSettingsUpdated: (callback) => ipcRenderer.on('settings-updated', (_event, data) => callback(data)),
   onAwayStateChanged: (callback) => ipcRenderer.on('pet-away-state', (_event, data) => callback(data)),
-  onCursorTrack: (callback) => ipcRenderer.on('cursor-track', (_event, data) => callback(data))
+  onCursorTrack: (callback) => ipcRenderer.on('cursor-track', (_event, data) => callback(data)),
+  // Live character preview (settings window -> pet window, unsaved) - see
+  // main.js's 'preview-character' handler and settings.js's char-grid
+  // click handler.
+  previewCharacter: (key) => ipcRenderer.send('preview-character', key),
+  onPreviewCharacter: (callback) => ipcRenderer.on('preview-character', (_event, key) => callback(key))
 });

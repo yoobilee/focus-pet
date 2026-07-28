@@ -33,5 +33,8 @@
       "target": "dmg",
       "icon": "assets/app-icon.png"
     }
+  },
+  "dependencies": {
+    "three": "^0.185.1"
   }
 }

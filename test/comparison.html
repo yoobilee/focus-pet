@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><body style="margin:0;background:#fff;">
+<canvas id="c" width="1400" height="620"></canvas>
+<script>
+  const ctx = document.getElementById('c').getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,1400,620);
+  function load(src) { return new Promise((res) => { const img = new Image(); img.onload = () => res(img); img.src = src; }); }
+  Promise.all([
+    load('../assets/reference/siamese-real-photo.webp'),
+    load('siamese-gradient-final/siamese-090.png'),
+    load('siamese-gradient-final/siamese-000.png'),
+  ]).then(([ref, front, side]) => {
+    const refH = 580, refW = ref.width * (refH / ref.height);
+    ctx.drawImage(ref, 10, 20, refW, refH);
+    ctx.font = '18px sans-serif'; ctx.fillStyle='#000';
+    ctx.fillText('reference photo', 10, 610);
+
+    const fSrcX = front.width*0.35, fSrcY = front.height*0.28, fSrcW = front.width*0.3, fSrcH = front.height*0.62;
+    const fDrawW = fSrcW * (580/fSrcH);
+    ctx.drawImage(front, fSrcX, fSrcY, fSrcW, fSrcH, 460, 20, fDrawW, 580);
+    ctx.fillText('3D render (front-ish, 90deg)', 460, 610);
+
+    const sSrcX = side.width*0.55, sSrcY = side.height*0.28, sSrcW = side.width*0.35, sSrcH = side.height*0.55;
+    const sDrawW = sSrcW * (580/sSrcH);
+    ctx.drawImage(side, sSrcX, sSrcY, sSrcW, sSrcH, 900, 20, sDrawW, 580);
+    ctx.fillText('3D render (side, 0deg)', 900, 610);
+
+    window.__done = true;
+  }).catch(e => { window.__error = String(e); });
+</script>
+</body></html>

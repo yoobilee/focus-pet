@@ -1,15 +1,44 @@
-import { createAnimal, CHARACTERS } from '../shared/animal-engine.js';
+import * as THREE from 'three';
+import { createAnimal, CHARACTERS, normalizeAngleDelta } from '../shared/animal-engine.js';
+import { buildVoxelCreature } from '../shared/voxel-engine.js';
 
 const VALID_KEYS = new Set(CHARACTERS.map((c) => c.key));
 
 const stageEl = document.getElementById('stage');
 const petWrapEl = document.getElementById('pet-wrap');
 const canvas = document.getElementById('pet-canvas');
-// willReadFrequently: the click-through hit test below calls getImageData
-// on every mousemove, on top of the per-frame draw calls this context
-// already does - hint the backend to keep pixel readback fast.
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
-ctx.imageSmoothingEnabled = false;
+
+// 3D voxel renderer (feature/3d-space branch - replaces the earlier Canvas
+// 2D drawCreature() rendering entirely; see CLAUDE.md's "실제 pet 창에
+// 연결" note). Same camera/frustum as the windows/pet3d/ prototype viewer
+// this was validated against, so nothing about the already-checked
+// silhouette/rotation/pose behavior changes going from prototype to real
+// window - only the surrounding glue (click-through, drag, bubble, sound)
+// stays exactly as it was for the 2D version.
+//
+// alpha:true + preserveDrawingBuffer:true (NOT the prototype viewer's
+// settings - that one uses a solid background and doesn't need pixel
+// readback) - alpha:true + a null scene.background gives a transparent
+// canvas (required for click-through against whatever's behind this
+// window, same requirement the 2D canvas's transparent fill already had),
+// and preserveDrawingBuffer:true keeps the rendered buffer readable after
+// present so the click-through hit test below can read its alpha channel
+// back via gl.readPixels - the WebGL equivalent of the 2D context's
+// getImageData(x,y,1,1).data[3] this replaces.
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(96, 96, false); // false: canvas.width/height attributes + pet.css's own 96px sizing already match, no need to also let three.js touch the CSS style
+renderer.setClearColor(0x000000, 0); // fully transparent clear - background stays see-through wherever no geometry is drawn
+
+const scene = new THREE.Scene(); // no scene.background set - stays transparent, unlike the prototype viewer's solid debug-green fill
+const FRUSTUM = 26; // same as windows/pet3d/pet3d.js - already validated against this exact frustum/camera setup
+const CENTER_Y = 11;
+const camera = new THREE.OrthographicCamera(-FRUSTUM / 2, FRUSTUM / 2, FRUSTUM / 2, -FRUSTUM / 2, 0.1, 200);
+camera.position.set(0, CENTER_Y, 60);
+camera.lookAt(0, CENTER_Y, 0);
+
+const gl = renderer.getContext();
+const pixelBuf = new Uint8Array(4);
 
 const bubbleEl = document.getElementById('bubble');
 const bubbleTextEl = document.getElementById('bubble-text');
@@ -19,8 +48,24 @@ const MARGIN = 16;
 
 let character = 'cat_a';
 let animal = null;
+let group = null; // current species' voxel-engine.js THREE.Group (see loadCharacter)
 let direction = 1; // 1 = right, -1 = left
-let x = MARGIN;
+// Starts at the HORIZONTAL center of the stage, not MARGIN (the old
+// leftover value from when patrol still walked the pet back and forth
+// starting from its left edge - patrol itself is long gone, see the
+// "이동 정책 변경" history, but this initial value never got revisited
+// once `x` stopped changing on its own). `(stageEl.clientWidth||340 -
+// WRAP_WIDTH)/2` is exactly the midpoint of bounds()'s own [min,max]
+// range regardless of MARGIN, since MARGIN cancels out of that average -
+// same quantity, computed without relying on bounds() being hoisted
+// above this line for a reader skimming top-to-bottom. Vertical position
+// is deliberately left untouched (still the CSS `bottom:14px` ground
+// anchor pet.css sets on #pet-wrap) - centering the pet in the window's
+// vertical middle too would float it in mid-air with no ground for the
+// shadow/leg-tuck/sit poses to reference, which are all authored assuming
+// a fixed ground line, not an incidental design accident like the old
+// left-edge start was.
+let x = ((stageEl.clientWidth || 340) - WRAP_WIDTH) / 2;
 let paused = false; // true only while a reminder bubble is showing
 let asleep = false;
 let bubbleTimeout = null;
@@ -39,6 +84,9 @@ function loadCharacter(key) {
   character = VALID_KEYS.has(key) ? key : 'cat_a';
   animal = createAnimal(character);
   if (asleep) animal.forceSleep();
+  if (group) scene.remove(group);
+  group = buildVoxelCreature(character);
+  scene.add(group);
 }
 
 // Deep "wooden box knock" (묵직한 "도독" 소리) - the previous version (a
@@ -59,7 +107,18 @@ function loadCharacter(key) {
 // low pitch (not a rising two-note run like the old C5->E5) reads as a
 // repeated physical knock rather than a little tune, matching "손등으로
 // 나무 상자를 두드리는" more directly.
-function knockNote(ctxA, freq, startAt, duration = 0.5, peak = 0.17) {
+// peak: 0.17 -> 0.42 (~2.5x) - the tone/weight itself was already right,
+// just too quiet in practice. Headroom check: the three oscillators sum
+// to at most peak*(1+0.55+0.14)=peak*1.69 if they ever all peaked exactly
+// in phase (they won't in practice, different frequencies), so 0.42*1.69
+// ≈ 0.71 stays comfortably under 1.0 (no digital clipping at the
+// destination) even in that worst case. This 0.42 is now the "100% volume"
+// reference peak - the settings window's 0-100% slider (soundVolume,
+// see settingsStore.js) multiplies it directly, so 50% (the default)
+// lands back at the previously-tuned 0.21-ish level and 100% matches this
+// exact value; headroom math above still holds at any volume <=100%
+// since it can only ever shrink the peak, never exceed it.
+function knockNote(ctxA, freq, startAt, duration = 0.5, peak = 0.42) {
   const now = ctxA.currentTime;
   const t0 = now + startAt;
   const fundamental = ctxA.createOscillator();
@@ -91,11 +150,17 @@ function knockNote(ctxA, freq, startAt, duration = 0.5, peak = 0.17) {
   partial.stop(t0 + duration + 0.05);
 }
 
-function playBeep() {
+function playBeep(volume = 0.5) {
   try {
+    // Clamp defensively - a hand-edited settings.json could carry any
+    // value, and this feeds directly into an audio gain (see knockNote's
+    // headroom comment - out-of-range input here is the one thing that
+    // could actually break that guarantee).
+    const safeVolume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0.5;
+    const peak = 0.42 * safeVolume;
     const ctxA = new (window.AudioContext || window.webkitAudioContext)();
-    knockNote(ctxA, 185, 0);     // F#3-ish - low, wooden
-    knockNote(ctxA, 185, 0.16); // same pitch, a beat later - a repeated knock, not a rising melody
+    knockNote(ctxA, 185, 0, 0.5, peak);     // F#3-ish - low, wooden
+    knockNote(ctxA, 185, 0.16, 0.5, peak); // same pitch, a beat later - a repeated knock, not a rising melody
   } catch (e) {
     // ignore audio errors silently
   }
@@ -160,8 +225,9 @@ function showBubble(message, durationMs = 6000) {
 // keeps mousemove reaching us anyway so we can decide, per-frame, whether
 // the cursor sits over an actually-drawn (non-transparent) pixel and
 // toggle mouse capture back on only for that. Alpha sampling (vs. a
-// bounding-box approximation) is cheap here - a single getImageData(1,1)
-// per mousemove, coalesced to once per animation frame below - and exact,
+// bounding-box approximation) is cheap here - a single-pixel WebGL
+// readback (gl.readPixels, see sampleHit) per mousemove, coalesced to once
+// per animation frame below - and exact,
 // which matters since the sprite is a small, irregular, constantly
 // re-posed silhouette rather than a fixed image where a box approximation
 // would be safe.
@@ -199,7 +265,6 @@ let hitState = null; // null until the first sample; then a plain boolean
 const CURSOR_DIRECTION_RANGE = 130; // px - cursor this far to one side (or farther) = fully looking that way
 const CURSOR_CLOSE_RADIUS = 55; // px - inside this tighter ring, fire the one-shot alert reaction
 const CURSOR_STALE_MS = 400; // safety fallback only - the 100ms global poll normally keeps this from ever tripping
-const DIRECTION_FLIP_HYSTERESIS = 20; // px - dead zone around the pet's own center so it doesn't flip back and forth when the cursor sits almost directly above/below it
 
 let lastMouseClient = null;
 let lastMouseMoveAt = 0;
@@ -246,54 +311,101 @@ function updateCursorHint() {
   });
 }
 
-// Flips the whole sprite (canvas scaleX, see render()) to face whichever
-// side of the pet the cursor is on - the head/eyes already lean that way
-// via lookDX/lookY (animal-engine.js's cursor-look, unchanged/kept as-is),
-// this makes the body's facing direction agree with it too. Eye tracking
-// on top of this was deliberately left out - independently moving pupils
-// AND flipping the whole body reads as overkill for a 96px sprite.
+// Turns the whole sprite (a 3D rotation.y, see render()) proportionally
+// toward whichever side of the pet the cursor is on - the head/eyes
+// already lean that way via lookDX/lookY (animal-engine.js's cursor-look,
+// unchanged/kept as-is), this makes the body's facing direction agree
+// with it too. Eye tracking on top of this was deliberately left out -
+// independently moving pupils AND turning the whole body reads as
+// overkill for a 96px sprite.
 //
-// Called from tick() AFTER the movement/bounds block below, not from
-// updateCursorHint() above where the cursor math itself lives: the
-// dormant patrol-bounce code in that block (`if (x<=min) direction=1...`)
-// still runs every frame and would silently overwrite this exact frame's
-// assignment if this ran first - see the comment on that block for why
-// it's kept rather than deleted despite never actually triggering
-// (advance is always 0, so x never leaves `min`, so that branch pins
-// direction=1 every single frame on its own). Running after it instead
-// means this is always the last word on `direction`, without having to
-// touch that dormant movement-policy substrate at all.
-function updateBodyDirection() {
+// ROUND 6 REDESIGN ("커서 방향 회전을 좌/우 이분법이 아니라 각도 기반
+// 연속 회전으로"): this used to be a hard binary flip - direction was
+// either +1 or -1 (with DIRECTION_FLIP_HYSTERESIS as a dead zone so it
+// didn't flicker between the two near dx=0), and render() picked one of
+// exactly two target angles (0 or FACING_LEFT_Y) based on that sign. Now
+// this computes a genuinely continuous target angle proportional to how
+// far to one side the cursor is - clampedDx (the same -1..1 value
+// updateCursorHint already derives for the head-look hint, recomputed
+// here from the same lastMouseClient/CURSOR_DIRECTION_RANGE inputs)
+// maps linearly across the body's full turning range: clampedDx=+1
+// (cursor at/past CURSOR_DIRECTION_RANGE to the right) -> 0 (full right
+// profile, same end state the old direction=1 produced), clampedDx=-1
+// -> FACING_LEFT_Y (full left profile, same as old direction=-1), and
+// clampedDx=0 (cursor directly above/below the pet) -> -pi/2, i.e. the
+// body faces the camera nearly head-on. Everything in between is a real
+// intermediate diagonal angle, not just a smoothed transition between two
+// fixed endpoints - the END states are unchanged from before, only the
+// path (and now, ability to rest at any point along it) is new. No
+// hysteresis dead zone needed anymore: there's no discrete state to
+// flicker between, and render()'s existing ROTATION_EASE_RATE easing
+// already low-pass-filters any small jitter in the target itself.
+//
+// Called from tick() AFTER the movement/bounds block below - kept in the
+// same position updateBodyDirection used to occupy (harmless either way
+// now, since this no longer touches `direction` at all - see the dormant
+// patrol-bounce block's own comment for why `direction` itself is left
+// completely alone).
+function updateBodyRotationTarget() {
   if (!lastMouseClient) return;
   const stale = performance.now() - lastMouseMoveAt > CURSOR_STALE_MS;
   if (stale) return;
   const centerX = x + WRAP_WIDTH / 2;
   const dx = lastMouseClient.x - centerX;
-  if (dx > DIRECTION_FLIP_HYSTERESIS) direction = 1;
-  else if (dx < -DIRECTION_FLIP_HYSTERESIS) direction = -1;
+  const clampedDx = Math.max(-1, Math.min(1, dx / CURSOR_DIRECTION_RANGE));
+  bodyRotationTargetY = (clampedDx - 1) * (Math.PI / 2);
 }
 
 function pointInRect(x, y, rect) {
   return x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom;
 }
 
+// Neighborhood (not a single exact pixel) read for the hit test - the
+// voxel model is constantly re-posed (breathing/idle micro-motion never
+// fully stops, see animal-engine.js's 'breathe' behavior), so the exact
+// alpha at one fixed pixel can flicker opaque/transparent frame to frame
+// even while the cursor is clearly resting "on" the sprite, most often
+// right at silhouette edges - confirmed by direct instrumentation: hitState
+// flipped false during a stationary-cursor double-click purely from ~120ms
+// of idle pose drift (see CLAUDE.md's "더블클릭이 다시 안 열리는 버그"
+// note). A REAL OS-routed click arriving during that instant would be
+// forwarded to whatever's behind this window instead of reaching it at
+// all (unlike the synthetic sendInputEvent probes used to diagnose this,
+// which inject directly into the renderer and bypass that risk) - a
+// single-pixel sample has no tolerance for that. HIT_RADIUS pixels of
+// slack in every direction absorbs it without meaningfully hurting
+// precision (a few backing pixels is imperceptible at this 96x96 size).
+const HIT_RADIUS = 2;
+const hitBlockBuf = new Uint8Array((HIT_RADIUS * 2 + 1) * (HIT_RADIUS * 2 + 1) * 4);
+
 function sampleHit(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0 || !pointInRect(clientX, clientY, rect)) return false;
 
-  // getBoundingClientRect already reflects the CSS scaleX(±1) flip (the
-  // box itself doesn't move/resize under a flip around its own center),
-  // so map to canvas-backing space first and only then undo the flip to
-  // land on the correct backing pixel.
-  let cx = Math.floor(((clientX - rect.left) / rect.width) * canvas.width);
+  // No CSS mirror to undo anymore - facing direction is now a real 3D
+  // rotation.y baked into the rendered pixels themselves (see render()),
+  // not a CSS scaleX(±1) on the canvas element, so the backing-pixel
+  // mapping is a plain top-left-origin conversion.
+  const cx = Math.max(0, Math.min(canvas.width - 1, Math.floor(((clientX - rect.left) / rect.width) * canvas.width)));
   const cy = Math.floor(((clientY - rect.top) / rect.height) * canvas.height);
-  if (direction === -1) cx = canvas.width - 1 - cx;
-  cx = Math.max(0, Math.min(canvas.width - 1, cx));
   if (cy < 0 || cy >= canvas.height) return false;
 
+  // Clamp the read block to stay within the canvas - readPixels errors
+  // (or returns garbage) if any part of the requested rect is off-buffer.
+  const blockX = Math.max(0, Math.min(canvas.width - (HIT_RADIUS * 2 + 1), cx - HIT_RADIUS));
+  const blockYtop = Math.max(0, Math.min(canvas.height - (HIT_RADIUS * 2 + 1), cy - HIT_RADIUS));
+  const blockSize = HIT_RADIUS * 2 + 1;
+
   try {
-    const alpha = ctx.getImageData(cx, cy, 1, 1).data[3];
-    return alpha > ALPHA_HIT_THRESHOLD;
+    // gl.readPixels' Y origin is bottom-left (WebGL convention), the
+    // opposite of the top-left-origin cy computed above - this is the
+    // WebGL equivalent of the 2D context's getImageData(...).data[3], just
+    // over a small block instead of one pixel.
+    gl.readPixels(blockX, canvas.height - blockSize - blockYtop, blockSize, blockSize, gl.RGBA, gl.UNSIGNED_BYTE, hitBlockBuf);
+    for (let i = 3; i < hitBlockBuf.length; i += 4) {
+      if (hitBlockBuf[i] > ALPHA_HIT_THRESHOLD) return true;
+    }
+    return false;
   } catch (e) {
     return false; // fail closed (click-through) rather than risk permanently blocking clicks
   }
@@ -333,10 +445,25 @@ function processPendingMouse() {
 // ---------------------------------------------------------------------
 let dragging = false;
 let suppressNextClick = false;
+let dragStartClientX = 0;
+let dragStartClientY = 0;
+// px of cursor movement (not window movement - the spring-damper follow in
+// main.js can lag/overshoot slightly even for a stationary cursor, so
+// comparing raw cursor displacement is the more reliable "did the user
+// actually drag vs. just click" signal) below which a mousedown->mouseup
+// pair counts as a plain click, not a drag - see the mouseup handler below.
+// mousedown ALWAYS starts a drag-follow session regardless of this (the
+// spring has nowhere to go for a near-zero-movement click, so starting and
+// immediately ending it is harmless - see animal.setHeld() below), this
+// threshold only controls whether the trailing 'click' event gets
+// suppressed afterward.
+const DRAG_MOVE_THRESHOLD = 4;
 
 canvas.addEventListener('mousedown', (e) => {
   if (!hitState) return;
   dragging = true;
+  dragStartClientX = e.clientX;
+  dragStartClientY = e.clientY;
   paused = true;
   if (animal) animal.setHeld(true); // squish-in, then dangling legs/tail/ears - see animal-engine.js
   canvas.style.cursor = 'grabbing';
@@ -345,17 +472,26 @@ canvas.addEventListener('mousedown', (e) => {
 
 // window-level, not canvas-level, for the same robustness reason the
 // click-through mousemove listener is window-level.
-window.addEventListener('mouseup', () => {
+window.addEventListener('mouseup', (e) => {
   if (!dragging) return;
   dragging = false;
   paused = false;
   if (animal) animal.setHeld(false);
   canvas.style.cursor = 'grab';
-  // A plain mousedown+move+mouseup over the same DOM element still fires a
-  // trailing 'click' afterward - without this it'd also poke() right as
-  // the pet gets dropped, which reads as an unrelated reaction rather than
-  // part of the drag gesture.
-  suppressNextClick = true;
+  // Only suppress the trailing 'click' if the cursor actually moved a
+  // meaningful amount between mousedown and mouseup - mousedown starts a
+  // drag-follow session unconditionally whenever the cursor is over the
+  // sprite (see its own comment), which previously meant EVERY plain click
+  // (no movement at all) was also treated as "a drag just ended" and had
+  // its own trailing click swallowed - poke() and double-click-to-open-
+  // settings could never actually fire, since click 1 of a double-click
+  // (and every ordinary single click) got eaten here before ever reaching
+  // the 'click' handler's logic. Confirmed via direct instrumentation
+  // (see CLAUDE.md's "더블클릭이 다시 안 열리는 버그" note) - a plain
+  // click's own mouseup consistently reported suppressNextClick=true at
+  // the following 'click' event, for both clicks of a double-click.
+  const dx = e.clientX - dragStartClientX, dy = e.clientY - dragStartClientY;
+  if (Math.hypot(dx, dy) > DRAG_MOVE_THRESHOLD) suppressNextClick = true;
   window.focusPetAPI.dragEnd();
 });
 
@@ -388,11 +524,94 @@ canvas.addEventListener('click', () => {
   showBubble(POKE_REACTIONS[Math.floor(Math.random() * POKE_REACTIONS.length)], 1400);
 });
 
-function render() {
+// Facing direction: animates rotation.y toward its target instead of
+// snapping instantly - see currentRotationY below. ROTATION_EASE_RATE
+// matches the exponential-ease form (1-exp(-dt*rate)) already used
+// elsewhere in this codebase (animal-engine.js's applyCursorLookEasing) -
+// ~0.35s to reach 95% of the target turn, fast enough to feel responsive
+// to a cursor-direction change, slow enough that the eye actually sees
+// the model sweep through the intermediate angles (~45°/90°) instead of
+// popping between the two end states in a single frame.
+//
+// BUG FOUND (user report - "회전이 좌우반전처럼 보임"): the previous
+// version set `group.rotation.y = direction===1?0:Math.PI` directly, an
+// instant single-frame snap - a genuinely 3D model turned this way is, in
+// terms of what actually reaches the screen, indistinguishable from the
+// old CSS scaleX(-1) instant mirror it replaced, since there's no motion
+// for the eye to see the geometry's own depth unfold through. All of the
+// depth/rotation validation earlier in this branch (voxel-viewer.html's
+// drag-to-rotate, the auto-spin prototype) exercised CONTINUOUS rotation,
+// which never exposed this - the real pet window's direction changes were
+// never actually driven through render()'s per-frame path with a
+// continuously-updated angle until now.
+const ROTATION_EASE_RATE = 8;
+let currentRotationY = 0;
+
+// Facing-left END STATE is -Math.PI, not +Math.PI (both represent the
+// exact same final orientation, mod 2π, so this doesn't change the
+// resting pose either way - only which INTERMEDIATE angles a turn passes
+// through). BUG FOUND (user report - "회전 중간에 뒤통수가 카메라를
+// 향한다"): with +Math.PI, the standard Y-axis rotation matrix
+// (x'=x·cosθ+z·sinθ, z'=-x·sinθ+z·cosθ) sends the nose (local +X, Z=0)
+// to NEGATIVE z as θ increases through positive values - since the
+// camera sits at +Z looking toward -Z, negative z is AWAY from the
+// camera, so the face swings away and the animal's back faces the
+// camera at the θ=90° midpoint. Using -Math.PI instead means θ sweeps
+// through NEGATIVE values instead, which sends the nose to POSITIVE z
+// (toward the camera) at that same midpoint - the face leads the turn
+// instead of the back.
+//
+// updateBodyRotationTarget() (round 6 - continuous rotation) keeps every
+// target angle it produces within [FACING_LEFT_Y, 0] = [-π, 0] for
+// exactly this reason - the face-leads property this constant's sign was
+// chosen for holds continuously across that whole range, not just at the
+// two old binary endpoints, so no separate wraparound/sign logic is
+// needed for the continuous version either.
+const FACING_LEFT_Y = -Math.PI;
+
+// Continuous body-rotation target, radians - see updateBodyRotationTarget
+// for how this is derived from the cursor's position. Starts at 0 (facing
+// right), matching the old direction=1 default resting pose.
+let bodyRotationTargetY = 0;
+
+function render(dt) {
   petWrapEl.style.transform = `translateX(${x}px)`;
-  canvas.style.transform = direction === 1 ? 'scaleX(1)' : 'scaleX(-1)';
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (animal) animal.draw(ctx);
+  if (!animal || !group) return;
+  const pose = animal.getPose();
+  if (pose.spinOverride) {
+    // Round 8 issue 1 - Z-axis idles (prowlcircle/chasetail/hopspin) drive
+    // the whole-body facing angle themselves (a continuous, already-smooth
+    // authored rotation - see animal-engine.js's spinAngle comment) -
+    // bypass the cursor-tracked ease entirely rather than easing toward an
+    // already-moving target, which would just lag behind it. Keeping
+    // currentRotationY in sync (not just group.rotation.y) means control
+    // hands back to the cursor-tracked path below with no pop the instant
+    // the behavior ends and spinOverride flips back to false - the same
+    // "an instant snap reads as fake" lesson ROTATION_EASE_RATE's own
+    // comment describes, just avoided on the handoff instead of the turn
+    // itself this time.
+    currentRotationY = pose.spinAngle;
+  } else {
+    // Round 10 issue 4 fix ("회전이 끝나고... 부자연스럽게 툭 튕기듯
+    // 돌아옴"): spinAngle above is deliberately unwrapped/multi-lap (a
+    // single chasetail can leave currentRotationY over 16 radians from
+    // bodyRotationTargetY's [-π,0] range the instant spinOverride flips
+    // back off) - a plain `(target-current)*ease` starts the very next
+    // frame with that whole raw distance as its error term, producing an
+    // enormous initial angular velocity (target 16+ radians away scaled by
+    // ROTATION_EASE_RATE) that reads as a snap/whirl rather than a turn.
+    // normalizeAngleDelta collapses the error to its shortest-path
+    // equivalent in (-π,π] first, so the ease always turns the visually
+    // short way regardless of how many laps currentRotationY has
+    // accumulated - and since this runs every frame, currentRotationY
+    // itself settles back to within one lap of the target instead of
+    // drifting arbitrarily far from it over repeated spin idles.
+    const ease = 1 - Math.exp(-dt * ROTATION_EASE_RATE);
+    currentRotationY += normalizeAngleDelta(bodyRotationTargetY - currentRotationY) * ease;
+  }
+  group.rotation.y = currentRotationY;
+  group.userData.applyPose(pose);
+  renderer.render(scene, camera);
 }
 
 function tick(ts) {
@@ -424,10 +643,10 @@ function tick(ts) {
     // and against ever landing outside the visible window.
     const { min, max } = bounds();
     x = Math.max(min, Math.min(max, safeNumber(x, MARGIN)));
-    updateBodyDirection();
+    updateBodyRotationTarget();
   }
 
-  render();
+  render(dt);
   processPendingMouse();
   requestAnimationFrame(tick);
 }
@@ -440,9 +659,21 @@ window.focusPetAPI.onSettingsUpdated((settings) => {
   if (settings.character !== character) loadCharacter(settings.character);
 });
 
-window.focusPetAPI.onReminder(({ message, soundEnabled }) => {
+// Live, unsaved character preview from the settings window (round 8) -
+// reuses loadCharacter() as-is, which never touches settingsStore itself
+// (only main.js's save-settings handler does), so previewing is
+// side-effect-free. Reverting an unsaved preview when the settings window
+// closes without saving is handled entirely on the main.js side (it just
+// re-sends 'settings-updated' with the last-actually-saved character,
+// which the handler above already knows how to react to) - nothing extra
+// needed here for that half.
+window.focusPetAPI.onPreviewCharacter((key) => {
+  if (key !== character) loadCharacter(key);
+});
+
+window.focusPetAPI.onReminder(({ message, soundEnabled, soundVolume }) => {
   showBubble(message);
-  if (soundEnabled) playBeep();
+  if (soundEnabled) playBeep(soundVolume);
 });
 
 // Cosmetic tie-in to the app's own system-idle tracking (independent of the

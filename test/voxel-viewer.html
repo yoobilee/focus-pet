@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FocusPet 3D Voxel Prototype Viewer</title>
+<script type="importmap">
+  { "imports": { "three": "../node_modules/three/build/three.module.js" } }
+</script>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1f1a; color: #eee; font-family: -apple-system, "Segoe UI", sans-serif; }
+  #wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 14px; }
+  canvas { image-rendering: pixelated; border: 2px solid #3a4a3a; background: #2a6b3a; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #panel { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: 640px; }
+  label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  select, button { font-size: 14px; padding: 4px 8px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; opacity: 0.85; }
+  #note { font-size: 12px; opacity: 0.6; max-width: 480px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>FocusPet — 3D voxel prototype (feature/3d-space, standalone viewer)</h1>
+  <canvas id="stage" width="96" height="96" style="width:480px;height:480px;"></canvas>
+  <div id="panel">
+    <label>종 <select id="species"></select></label>
+    <label><input type="checkbox" id="spin" checked> 자동 회전</label>
+    <label>속도 <input type="range" id="speed" min="0" max="3" step="0.05" value="1"></label>
+    <button id="poke">쿡 찌르기(poke)</button>
+    <button id="sleep">재우기(sleep)</button>
+    <button id="hold">잡기(hold)</button>
+  </div>
+  <div id="note">실제 idle 행동 풀(그루밍/앉기/졸기/귀씰룩임/뒹굴기/볼주머니/breathe 등)이 자동으로 순환합니다 - 실제 창과 동일한 createAnimal() 상태머신을 그대로 사용. 캔버스 위에서 마우스를 움직이면 시선이 따라가고, 캔버스를 드래그하면 보는 각도를 직접 돌릴 수 있습니다.</div>
+</div>
+<script type="module" src="./voxel-viewer.js"></script>
+</body>
+</html>

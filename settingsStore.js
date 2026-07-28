@@ -28,6 +28,7 @@ const DEFAULTS = {
   intervalMinutes: 25,
   idleThresholdSeconds: 90,
   soundEnabled: true,
+  soundVolume: 0.5,        // 0..1, multiplies the notification knock's own peak gain (see pet.js's playBeep) - defaults to 50%, an existing settings.json without this field falls back here via the {...DEFAULTS, ...parsed} spread in load() below
   position: 'bottom-right', // bottom-right | bottom-left | top-right | top-left
   paused: false,
   messages: [

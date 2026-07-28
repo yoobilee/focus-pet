@@ -7,6 +7,8 @@ const intervalInput = document.getElementById('intervalMinutes');
 const idleInput = document.getElementById('idleThresholdSeconds');
 const positionSelect = document.getElementById('position');
 const soundCheckbox = document.getElementById('soundEnabled');
+const soundVolumeInput = document.getElementById('soundVolume');
+const soundVolumeLabel = document.getElementById('soundVolumeLabel');
 const messagesTextarea = document.getElementById('messages');
 const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
@@ -40,6 +42,11 @@ function buildCharGrid() {
     btn.addEventListener('click', () => {
       currentCharacter = key;
       updateCharSelection();
+      // Live preview (round 8) - shows immediately in the real pet window,
+      // before Save. Nothing is persisted here; see main.js's
+      // 'preview-character' handler and its settingsWindow 'closed'
+      // handler for the revert-if-not-saved side.
+      window.focusPetAPI.previewCharacter(key);
     });
     charGrid.appendChild(btn);
     requestAnimationFrame(() => renderCharThumb(canvas, key));
@@ -71,7 +78,11 @@ function fillForm(settings) {
   idleInput.value = settings.idleThresholdSeconds;
   positionSelect.value = settings.position;
   soundCheckbox.checked = settings.soundEnabled;
-  messagesTextarea.value = (settings.messages || []).join('\n');
+  // soundVolume is stored 0..1 (see settingsStore.js); the slider itself
+  // works in 0..100 for a friendlier percent display.
+  const volumePercent = Math.round((settings.soundVolume ?? 0.5) * 100);
+  soundVolumeInput.value = volumePercent;
+  soundVolumeLabel.textContent = `소리 크기 (${volumePercent}%)`;
 }
 
 async function init() {
@@ -81,6 +92,9 @@ async function init() {
 
   document.querySelectorAll('input[name="mode"]').forEach((r) => {
     r.addEventListener('change', updateModeVisibility);
+  });
+  soundVolumeInput.addEventListener('input', () => {
+    soundVolumeLabel.textContent = `소리 크기 (${soundVolumeInput.value}%)`;
   });
 }
 
@@ -98,6 +112,7 @@ saveBtn.addEventListener('click', async () => {
     idleThresholdSeconds: Number(idleInput.value) || 90,
     position: positionSelect.value,
     soundEnabled: soundCheckbox.checked,
+    soundVolume: Number(soundVolumeInput.value) / 100,
     messages: messages.length ? messages : undefined
   };
 
@@ -108,6 +123,10 @@ saveBtn.addEventListener('click', async () => {
 resetBtn.addEventListener('click', async () => {
   const defaults = await window.focusPetAPI.getDefaults();
   fillForm(defaults);
+  // Same live-preview courtesy the char-grid click handler gives - "기본값
+  //으로" changes the character selection too, so preview that immediately
+  // rather than leaving the pet window showing the old pick until Save.
+  window.focusPetAPI.previewCharacter(defaults.character);
 });
 
 init();

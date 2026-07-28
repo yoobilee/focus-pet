@@ -31,6 +31,23 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smoothstep = (t) => { const c = clamp01(t); return c * c * (3 - 2 * c); };
 const randRange = (lo, hi) => lo + Math.random() * (hi - lo);
+// Round 10 issue 4 ("회전이 끝나고... 부자연스럽게 툭 튕기듯 돌아옴") -
+// wraps a raw angle DIFFERENCE (target-current, in radians, either side
+// possibly many laps away from the other - e.g. chasetail's spinAngle can
+// accumulate ~16 radians over one activation, see its own POSE_FIELD_BOUNDS
+// comment) into the equivalent shortest-path difference in (-pi, pi]. Any
+// code that eases or blends toward an angle - not just a plain numeric
+// value - needs this, or the raw numeric distance (which has no ceiling,
+// unlike the angle it actually represents mod 2*pi) drives the interpolation
+// instead of the true angular distance, producing a multi-revolution "snap"
+// even though every individual value involved is perfectly finite and
+// in-range. Used by both applyPoseCrossfade (spinAngle specifically) and
+// pet.js's render() (the spinOverride->cursor-tracked handoff) - the two
+// places besides circleStep's own angle generation (already unwrapped by
+// design, see spinAngle's defaultPose comment) that interpolate an angle.
+export function normalizeAngleDelta(delta) {
+  return delta - Math.PI * 2 * Math.round(delta / (Math.PI * 2));
+}
 // Default fraction of the lower leg bone's length covered by cfg.pawColor
 // (see drawLegChain) when a species sets one but doesn't override
 // cfg.pawFraction - e.g. a tuxedo cat's white paw "socks" on otherwise
@@ -343,7 +360,11 @@ function drawLegPair(ctx, cfg, pose, isFront, legY) {
 // e.g. a rabbit's back-leg tuckHip/tuckKnee fold much further than a
 // cat's, giving the hock-heavy hind-leg fold real rabbits have instead of
 // a generic "shrink the leg" hack.
-function legJointAngles(cfg, pose, isFront) {
+// Exported (same additive spirit as SPECIES's own `export`, see its
+// comment) so the 3D voxel prototype (feature/3d-space branch) can reuse
+// this exact angle math to drive its leg-joint chain instead of
+// reimplementing it - see CLAUDE.md's "관절/idle 시스템 3D 이식" note.
+export function legJointAngles(cfg, pose, isFront) {
   const j = isFront ? cfg.joints.front : cfg.joints.back;
   // legPhase>0 used to shift the front leg toward -x (tail) and the back
   // leg toward +x (head) in the old rect-shift code - matching signs here
@@ -365,10 +386,19 @@ function legJointAngles(cfg, pose, isFront) {
   knee = lerp(knee, j.tuckKnee, tuckAmt);
 
   if (isFront && pose.frontLegRaise > 0) {
-    // Groom: paw folds up toward the face rather than down toward the
-    // ground - a different target pose than the tuck above, not just more
-    // of it, so it's blended in on top instead of through legsTucked.
-    hip = lerp(hip, -160, pose.frontLegRaise);
+    // Groom ("wiper" redesign, round 4 issue 3): paw folds up toward the
+    // face rather than down toward the ground - a different target pose
+    // than the tuck above, not just more of it, so it's blended in on top
+    // instead of through legsTucked. groomWipe (set every frame by
+    // IDLE_BEHAVIORS.groom, degrees, oscillating) rides on TOP of the
+    // raised base angle, swinging the whole rigid arm side to side from
+    // its hip pivot like a wiper blade - knee stays fixed (not also
+    // oscillated) so the sweep reads as one rigid arm pivoting, not a
+    // floppy multi-joint flail. Base raise angle backed off slightly from
+    // the old static -160 to -150 to leave clean headroom for the +-30
+    // sweep without the hip angle ever getting close to the +-180 wrap
+    // point.
+    hip = lerp(hip, -150 + (pose.groomWipe || 0), pose.frontLegRaise);
     knee = lerp(knee, -50, pose.frontLegRaise);
   } else if (isFront && pose.frontLegExtend > 0) {
     // Stretch: reach forward and mostly straighten.
@@ -500,6 +530,7 @@ function defaultPose() {
     eyesClosed: 0, // 0..1
     cheekPuff: 0, // 0..1
     frontLegRaise: 0, // 0..1 (groom: near paw lifted toward face)
+    groomWipe: 0, // degrees, groom's wiper side-to-side sweep offset added on top of frontLegRaise's hip target - see legJointAngles
     frontLegExtend: 0, // 0..1 (stretch: front legs forward)
     rollAngle: 0, // degrees, playful roll-onto-side wiggle (unused by any current idle - see CLAUDE.md's rollover-deletion note; left in place, same as waddleTilt below, since drawCreature's rotation still reads it)
     waddleTilt: 0, // degrees, small continuous side-to-side rock (panda)
@@ -523,8 +554,61 @@ function defaultPose() {
     // the hdx/hdy combination in drawCreature.
     lookDX: 0,
     lookDY: 0,
+    // Round 8 issue 1 - Z-axis motion (prowlcircle/chasetail/hopspin/
+    // wheelrun below - see IDLE_BEHAVIORS' own comment on the in-place
+    // `approach` idle this originally shipped alongside, removed in round
+    // 11 once the circular-path idles made it redundant). Grid units,
+    // world-space, consumed only by voxel-engine.js's applyPose
+    // (outer.position + a matching uniform scale for the closer-looks-
+    // bigger cue) - drawCreature (2D) has no camera/depth concept at all
+    // and simply never reads these, same as any other pose field a given
+    // idle/renderer combination doesn't care about. depthZ: +toward
+    // camera / -away. lateralX: sideways drift, for idles that trace a
+    // circular path.
+    depthZ: 0,
+    lateralX: 0,
+    // spinOverride/spinAngle: lets an idle behavior drive the WHOLE-BODY
+    // facing angle itself (continuous multi-lap rotation for
+    // prowlcircle/chasetail/hopspin) instead of the cursor-tracked facing
+    // direction pet.js's render() normally eases toward - see its own
+    // comment for how it hands control back smoothly the instant this
+    // flips to false (booleans snap instantly through the pose crossfade,
+    // unlike the numeric fields - see applyPoseCrossfade's comment).
+    // spinAngle itself is radians and can run past a single +-2*pi lap
+    // (deliberately not wrapped - wrapping it would reintroduce exactly
+    // the "unwind the long way" glitch pet.js's own FACING_LEFT_Y sign
+    // fix was written to avoid), but is only ever READ while spinOverride
+    // is true, so its crossfade-blended value at the moment override
+    // turns off is simply never consulted.
+    spinOverride: false,
+    spinAngle: 0,
   };
 }
+
+// Fields some ALWAYS-RUNNING per-frame mechanism reads its OWN previous
+// value from in order to decay/ease it smoothly - these are the ONLY
+// fields that need to be seeded from the current displayed pose into a
+// fresh per-frame "raw" pose before that frame's gait/idle-behavior/
+// look-easing code runs (see update()'s own comment and the big one above
+// applyPoseCrossfade for the bug this fixes). Every OTHER pose field
+// starts each frame at its defaultPose() value and is left there unless
+// the CURRENTLY ACTIVE idle behavior's apply() explicitly sets it that
+// frame - which is exactly the "each idle only touches the fields it
+// cares about" convention every idle behavior above already assumes.
+//
+// Split in two because the two gait families decay disjoint field sets,
+// and seeding a field NEITHER family's gait function actually reads would
+// silently reintroduce the exact same stuck-forever bug for that field
+// (round 5 follow-up: legsTuckedFront/Back were first added here
+// unconditionally to serve updateHopGait's *=0.7 idle-branch decay, which
+// promptly got legsTuckedFront/Back stuck at 0.8 forever after any sit for
+// every WALK-gait species too - updateContinuousGait's idle branch never
+// touches those two fields at all, so nothing was left to ever bring them
+// back toward 0 once seeding made them carry over). update() picks
+// whichever list matches anim.spec.gait, never both.
+const LOOK_CONTINUITY_FIELDS = ['lookDX', 'lookDY']; // applyCursorLookEasing - every species, regardless of gait
+const CONTINUOUS_GAIT_FIELDS = ['legPhase', 'bodyBob', 'waddleTilt']; // updateContinuousGait's idle-branch *=0.8 decay (walk/trot/waddle/scamper)
+const HOP_GAIT_FIELDS = ['hopY', 'legsTuckedFront', 'legsTuckedBack']; // updateHopGait's idle-branch *=0.7 decay
 
 // Pose fields that are documented above as 0..1 - checked for staying in
 // range (small epsilon for float slop), on top of the blanket finite check
@@ -546,10 +630,17 @@ const POSE_EPS = 1e-6;
 const POSE_FIELD_BOUNDS = {
   rollAngle: 220, waddleTilt: 220, dangleSway: 60, earFlick: 10,
   bodyBob: 20, headDX: 10, headDY: 10, hopY: 20, tailAmp: 5,
+  groomWipe: 45, // GROOM_WIPE_AMPLITUDE is 30 - comfortable margin above the real peak, same spirit as the other bounds here
   // lookDX/lookDY: updateCursorLook clamps its target to +-LOOK_MAX (0.8)
   // before easing toward it, so 5 is the same "comfortably above the real
   // peak" margin the other fields above use, not a tight bound.
   lookDX: 5, lookDY: 5,
+  // depthZ/lateralX: prowlcircle's orbit radius is the largest current
+  // user (~2.6 grid units), comfortably inside this. spinAngle: chasetail
+  // spins fastest (~5.5 rad/s) over a duration up to ~3s, so ~16.5 radians
+  // at most - bounded generously above that, same "wide margin, not a
+  // tight bound" spirit as every other entry here.
+  depthZ: 8, lateralX: 8, spinAngle: 40,
 };
 
 /**
@@ -836,8 +927,16 @@ function drawCreature(ctx, cfg, pose) {
     }
   }
   if (cfg.belly) {
-    const sq = toBodySquashed(cfg.belly);
-    px(ctx, cfg.belly.x, sq.y, cfg.belly.w, sq.h, cfg.belly.color);
+    // Array support (round 17 issue 3, "턱시도... V자") - mirrors cfg.pattern's
+    // own Array.isArray branch just above. `zWidth` (voxel-engine.js only,
+    // for the 3D front-view taper) has no 2D counterpart and is simply
+    // ignored here - each segment still renders as a normal flat 2D rect,
+    // same as any other multi-segment belly/pattern.
+    const bellies = Array.isArray(cfg.belly) ? cfg.belly : [cfg.belly];
+    for (const b of bellies) {
+      const sq = toBodySquashed(b);
+      px(ctx, b.x, sq.y, b.w, sq.h, b.color);
+    }
   }
 
   // Cheek pouches (hamster) - drawn before the head so the head's own
@@ -1030,13 +1129,54 @@ function drawShadow(ctx, cfg) {
 // role as the 3D version's IDLE_BEHAVIORS: species opt into a weighted
 // pool of these instead of one fixed "special" move.
 // ---------------------------------------------------------------------
+// groom's wiper sweep (see IDLE_BEHAVIORS.groom below): degrees added to/
+// subtracted from the raised paw's hip angle, oscillating like a car
+// wiper pivoting from a fixed shoulder joint. Amplitude picked to be a
+// clearly visible sweep without the hip angle wrapping into a weird pose
+// (base raise target is -150deg, see legJointAngles - +-30 stays well
+// short of the +-180 wrap point). Frequency picked so an average-length
+// groom (~2.7s, see groom's duration()) fits a bit over 2 full back-and-
+// forth sweeps - reads as "repeated wiping", not one twitch.
+const GROOM_WIPE_AMPLITUDE = 30;
+const GROOM_WIPE_FREQ = 7;
+
+// Round 9 issue 2 - shared position/heading math for the circular-path
+// walking idles (prowlcircle/chasetail/hopspin/wheelrun, see their own
+// comment above IDLE_BEHAVIORS.prowlcircle). envelope-ramped radius
+// (0->1->0, so the path starts/ends at rest instead of popping onto it)
+// around a fixed angular speed (NOT scaled by env, so heading keeps
+// turning smoothly through the ramp instead of slowing to a crawl right
+// when it's hardest to notice). Heading faces the tangent (direction of
+// travel) - the same sign relationship (-angle-PI/2) verified by
+// rendering in round 8 (prowlcircle's first, in-place-spin version),
+// unchanged here since the rotation.y convention it depends on hasn't
+// changed.
+function circleStep(pose, t, radius, angularSpeed, env) {
+  const angle = t * angularSpeed;
+  pose.lateralX = Math.cos(angle) * radius * env;
+  pose.depthZ = Math.sin(angle) * radius * env;
+  pose.spinOverride = true;
+  pose.spinAngle = -angle - Math.PI / 2;
+  return angle;
+}
+
 const IDLE_BEHAVIORS = {
+  // Redesigned as a "wiper" (round 4 issue 3) - the previous version just
+  // held the paw statically raised toward the face for the whole behavior
+  // duration (frontLegRaise=1, no motion of its own beyond the 3D port's
+  // now-removed GROOM_WOBBLE hack, see voxel-engine.js's history) which,
+  // per direct user feedback, never actually read as "grooming" in either
+  // the 2D or 3D renderer - a raised paw alone looks like a wave, not a
+  // wash. groomWipe drives a continuous side-to-side sweep of the SAME
+  // raised paw (see legJointAngles's frontLegRaise branch below) instead
+  // of a one-shot lift, repeating for the whole behavior duration.
   groom: {
-    duration: () => randRange(1.6, 2.4),
+    duration: () => randRange(2.2, 3.2), // longer than before (was 1.6-2.4) so a few full wipe cycles actually fit - see GROOM_WIPE_FREQ
     apply(pose, t) {
       pose.headDY = 2 + Math.sin(t * 5) * 0.4;
       pose.headDX = -0.5;
       pose.frontLegRaise = 1;
+      pose.groomWipe = Math.sin(t * GROOM_WIPE_FREQ) * GROOM_WIPE_AMPLITUDE;
       pose.eyesClosed = 0.3;
     },
   },
@@ -1244,7 +1384,116 @@ const IDLE_BEHAVIORS = {
       pose.earFlick = Math.sin(t * 13) * 0.25;
     },
   },
+  // Round 8 issue 1 originally added an `approach` idle here (a single
+  // in-place depthZ drift toward/away from the camera, no real leg
+  // motion or heading change) - removed in round 11 issue 3 ("커졌다
+  // 작아졌다만 하는 동작 삭제") once the circular-path idles below
+  // actually shipped: `approach` read as redundant/flat next to
+  // prowlcircle/chasetail/etc. (which walk a real path on this species'
+  // own gait, not just grow and shrink in place) and added nothing
+  // approach-only. Deleted outright rather than left dormant (unlike e.g.
+  // enterWalk()/GAIT_PRESETS, kept because a substrate still worth reusing
+  // later) since there's no part of this idle a future feature would want
+  // back - the whole "in-place Z drift" mechanism it demonstrated is
+  // exactly what circleStep below replaced.
+  // ===== Round 9 issue 2: circular-path walking =====
+  // The four behaviors below (prowlcircle/chasetail/hopspin/wheelrun) all
+  // trace a real path in the X-Z ground plane WHILE actually walking -
+  // not spinning/scaling in place, which is what a first attempt at Z-
+  // axis motion (round 8) did instead. Position comes from the
+  // module-level circleStep() helper (defined above IDLE_BEHAVIORS,
+  // alongside this file's other small pose-math helpers); LEG motion is
+  // deliberately NOT set here at all - see WALKING_IDLE_NAMES below,
+  // which tells update() to drive this species' own real gaitFn
+  // (moving=true) for the whole duration one of these plays, exactly
+  // like the (dormant) 'walk' state does. That's what makes the legs
+  // actually swing through this species' own authored gait (walk/trot/
+  // scamper/hop, whichever cfg.gait says) rather than a hand-faked
+  // approximation - and also means these behaviors must NOT set
+  // pose.bodyBob/legPhase/hopY/legsTucked* themselves, since apply()
+  // runs AFTER gaitFn each frame (see update()'s own comment) and would
+  // silently clobber whatever the real gait just computed.
+  prowlcircle: {
+    // Cats: stalking something it's spotted, watching it (via the
+    // existing cursor-look system layered on top, not by walking
+    // backwards) while padding around it on real paws.
+    //
+    // Round 10 issue 1 - the original 2.6-radius/0.9rad/s combo (over a
+    // 5-7.5s duration) only completes ~0.9 of a full lap before the
+    // behavior ends - reported as "looks like it's just growing and
+    // shrinking in place", and a direct measurement backed that up: at
+    // this radius, the on-screen POSITION swing from lateralX (an
+    // orthographic-projection-faithful screen shift) was only ~11px,
+    // while the on-screen SIZE swing from depthZ (via the manual
+    // DEPTH_SCALE_FACTOR fake-perspective hack applied to a Z-axis an
+    // orthographic camera doesn't otherwise render at all) was ~31px -
+    // nearly 3x more visually dominant. dog_husky's chasetail measured a
+    // nearly IDENTICAL ratio (2.88 vs cat's 2.82) despite reading fine to
+    // the user, which ruled out "rebalance the ratio" as the fix -
+    // chasetail's actual advantage is completing ~1.6 laps within its
+    // short 2.5-3.5s duration (3.4rad/s), giving a viewer several repeats
+    // of the size+position correlation to piece together as "circling"
+    // instead of catching only one slow, easy-to-mistake-for-static leg
+    // of the path. Sped up and tightened to complete a comparable ~1.5-2
+    // laps per activation while staying noticeably more leisurely than
+    // chasetail's frantic pace - the "wide, slow prowl" feel now comes
+    // from being slower in absolute rad/s and covering more radius than
+    // chasetail, not from taking so long per lap that the loop itself
+    // becomes imperceptible.
+    duration: () => randRange(4, 5.5),
+    apply(pose, t, duration) {
+      const env = Math.sin(clamp01(t / duration) * Math.PI);
+      circleStep(pose, t, 2.2, 1.8, env);
+      pose.tailOverride = true;
+      pose.tailPhase = t * 3;
+      pose.tailAmp = 0.6 * env;
+    },
+  },
+  chasetail: {
+    // Dogs: a tight, fast loop - chasing its own tail in a real (if
+    // small) circle instead of a stationary pirouette, legs genuinely
+    // stepping through it via this species' own trot/scamper gait.
+    duration: () => randRange(2.5, 3.5),
+    apply(pose, t, duration) {
+      const env = Math.sin(clamp01(t / duration) * Math.PI);
+      circleStep(pose, t, 1.5, 3.4, env);
+      pose.tailOverride = true;
+      pose.tailPhase = t * 10;
+      pose.tailAmp = 1.1 * env;
+    },
+  },
+  hopspin: {
+    // Rabbit: circles while hopping - the hop gait itself (hopY/
+    // legsTucked bounce-and-tuck cycle) comes from gaitFn via
+    // WALKING_IDLE_NAMES same as the others; this only adds the
+    // traveling-in-a-circle path on top, so each hop lands a little
+    // further around the loop instead of straight ahead.
+    duration: () => randRange(2.5, 4),
+    apply(pose, t, duration) {
+      const env = Math.sin(clamp01(t / duration) * Math.PI);
+      circleStep(pose, t, 1.8, 2.3, env);
+    },
+  },
+  wheelrun: {
+    // Hamster: a small, quick scurrying loop - much tighter and faster
+    // than the cat's wide prowl, matching a hamster's own short legs and
+    // scamper gait. (Earlier version modeled this as literally running
+    // in place on a wheel with no heading change - abandoned in favor of
+    // a real walked circle, per this round's request that every one of
+    // these actually move through the ground plane.)
+    duration: () => randRange(2.5, 4),
+    apply(pose, t, duration) {
+      const env = Math.sin(clamp01(t / duration) * Math.PI);
+      circleStep(pose, t, 0.8, 4.4, env);
+    },
+  },
 };
+
+// Round 9 issue 2 - idle behaviors whose legs should be driven by this
+// species' own real gaitFn (moving=true) instead of the usual idle decay
+// (moving=false) - see update()'s own comment for where this is
+// consulted.
+const WALKING_IDLE_NAMES = new Set(['prowlcircle', 'chasetail', 'hopspin', 'wheelrun']);
 
 function pickIdleBehavior(spec) {
   const pool = spec.idlePool;
@@ -1267,30 +1516,41 @@ function instantiateIdle(name) {
 // move this tick, so bursty gaits (hop) and continuous ones (walk/trot)
 // look identical from the caller's point of view.
 // ---------------------------------------------------------------------
-function updateContinuousGait(anim, dt, moving, opts) {
+// pose: this frame's raw target pose (see update()'s own comment) - reads
+// from it too (not just writes), since the idle (!moving) branch decays
+// legPhase/bodyBob/waddleTilt from whatever they currently are. That
+// "currently are" value has to be the CONTINUING one from the previous
+// displayed frame (seeded into `pose` by update() via
+// POSE_CONTINUITY_FIELDS before this runs), not a fresh defaultPose()
+// zero - otherwise this decay would just multiply 0*0.8 forever instead
+// of ever actually decaying anything.
+function updateContinuousGait(anim, pose, dt, moving, opts) {
   anim.clock += moving ? dt : 0;
   const w = anim.clock * opts.freq * Math.PI * 2;
   if (moving) {
-    anim.pose.legPhase = Math.sin(w);
-    anim.pose.bodyBob = -Math.abs(Math.sin(w * 2)) * opts.bob;
-    anim.pose.legsTuckedFront = 0;
-    anim.pose.legsTuckedBack = 0;
-    if (opts.waddle) anim.pose.waddleTilt = Math.sin(w) * opts.waddle;
+    pose.legPhase = Math.sin(w);
+    pose.bodyBob = -Math.abs(Math.sin(w * 2)) * opts.bob;
+    pose.legsTuckedFront = 0;
+    pose.legsTuckedBack = 0;
+    if (opts.waddle) pose.waddleTilt = Math.sin(w) * opts.waddle;
   } else {
-    anim.pose.legPhase *= 0.8;
-    anim.pose.bodyBob *= 0.8;
-    anim.pose.waddleTilt *= 0.8;
+    pose.legPhase *= 0.8;
+    pose.bodyBob *= 0.8;
+    pose.waddleTilt *= 0.8;
   }
   return moving ? opts.speed * dt : 0;
 }
 
-function updateHopGait(anim, dt, moving, opts) {
+// pose: see updateContinuousGait's comment - same reasoning, the idle
+// (!moving) branch decays hopY/legsTuckedFront/Back from their current
+// (continuity-seeded) value.
+function updateHopGait(anim, pose, dt, moving, opts) {
   if (!moving) {
     anim.hopClock = 0;
     anim._prevCum = 0;
-    anim.pose.hopY *= 0.7;
-    anim.pose.legsTuckedFront *= 0.7;
-    anim.pose.legsTuckedBack *= 0.7;
+    pose.hopY *= 0.7;
+    pose.legsTuckedFront *= 0.7;
+    pose.legsTuckedBack *= 0.7;
     return 0;
   }
   anim.hopClock += dt;
@@ -1309,11 +1569,11 @@ function updateHopGait(anim, dt, moving, opts) {
   } else {
     tuck = lerp(0.6, 0, (f - 0.65) / 0.35);
   }
-  anim.pose.hopY = -y;
-  anim.pose.bodyBob = -y;
-  anim.pose.legsTuckedFront = tuck;
-  anim.pose.legsTuckedBack = tuck;
-  anim.pose.earFlick = -y * 0.5;
+  pose.hopY = -y;
+  pose.bodyBob = -y;
+  pose.legsTuckedFront = tuck;
+  pose.legsTuckedBack = tuck;
+  pose.earFlick = -y * 0.5;
 
   const cum = cycleIndex * opts.stride + opts.stride * smoothstep((f - 0.15) / 0.5);
   const advance = Math.max(0, cum - anim._prevCum);
@@ -1332,15 +1592,21 @@ function gaitOpts(anim, defaults) {
 }
 
 const GAIT_PRESETS = {
-  walk: (anim, dt, moving) => updateContinuousGait(anim, dt, moving, gaitOpts(anim, { freq: 1.4, bob: 0.9 })),
-  trot: (anim, dt, moving) => updateContinuousGait(anim, dt, moving, gaitOpts(anim, { freq: 2.1, bob: 1.3 })),
-  waddle: (anim, dt, moving) => updateContinuousGait(anim, dt, moving, gaitOpts(anim, { freq: 1.0, bob: 0.6, waddle: 9 })),
-  scamper: (anim, dt, moving) => updateContinuousGait(anim, dt, moving, gaitOpts(anim, { freq: 3.2, bob: 0.5 })),
-  hop: (anim, dt, moving) => updateHopGait(anim, dt, moving, { period: 0.62, height: 4, stride: anim.spec.speed }),
+  walk: (anim, pose, dt, moving) => updateContinuousGait(anim, pose, dt, moving, gaitOpts(anim, { freq: 1.4, bob: 0.9 })),
+  trot: (anim, pose, dt, moving) => updateContinuousGait(anim, pose, dt, moving, gaitOpts(anim, { freq: 2.1, bob: 1.3 })),
+  waddle: (anim, pose, dt, moving) => updateContinuousGait(anim, pose, dt, moving, gaitOpts(anim, { freq: 1.0, bob: 0.6, waddle: 9 })),
+  scamper: (anim, pose, dt, moving) => updateContinuousGait(anim, pose, dt, moving, gaitOpts(anim, { freq: 3.2, bob: 0.5 })),
+  hop: (anim, pose, dt, moving) => updateHopGait(anim, pose, dt, moving, { period: 0.62, height: 4, stride: anim.spec.speed }),
 };
 
-function updateTailFlavor(anim, elapsed, walking) {
-  const spec = anim.spec;
+// pose: this frame's raw target pose (see update()'s comment). Not in
+// POSE_CONTINUITY_FIELDS - tailPhase/tailAmp are always recomputed here as
+// an ABSOLUTE function of `elapsed` (a monotonic clock, not a decayed
+// previous value), and tailOverride is meant to start false each frame
+// and only flip true if the CURRENTLY active idle's apply() (called
+// before this, see update()) sets it - so neither field needs seeding
+// from the previous displayed pose the way the gait-decay fields do.
+function updateTailFlavor(pose, spec, elapsed, walking) {
   if (!spec.hasTail) return;
   // tailOverride (set by an idle behavior's apply(), e.g. 'held' or
   // 'tailtwitch'): this function runs *after* that apply() every frame
@@ -1348,69 +1614,47 @@ function updateTailFlavor(anim, elapsed, walking) {
   // overwrite whatever tailPhase/tailAmp the behavior just set with the
   // species' normal wag/swish rate instead of the behavior-specific motion
   // it was actually going for.
-  if (anim.pose.tailOverride) return;
+  if (pose.tailOverride) return;
   if (spec.wagTail) {
-    anim.pose.tailPhase = elapsed * 9;
-    anim.pose.tailAmp = 1.2;
+    pose.tailPhase = elapsed * 9;
+    pose.tailAmp = 1.2;
   } else if (spec.swishTail) {
-    anim.pose.tailPhase = elapsed * 1.6;
-    anim.pose.tailAmp = walking ? 1 : 0.5;
+    pose.tailPhase = elapsed * 1.6;
+    pose.tailAmp = walking ? 1 : 0.5;
   } else {
     // Stub tails (rabbits): near-rigid, just a faint idle twitch rather
     // than a full swish/wag.
-    anim.pose.tailPhase = elapsed * 1.6;
-    anim.pose.tailAmp = 0.15;
+    pose.tailPhase = elapsed * 1.6;
+    pose.tailAmp = 0.15;
   }
 }
 
 // ---------------------------------------------------------------------
-// Every entry into a new behavior goes through one of these two helpers,
-// which always reset anim.pose to a clean defaultPose() first. This is
-// the fix for the tail/ear "cut off or gappy" glitch: each idle behavior's
-// apply() only sets the handful of pose fields it actually cares about
-// (e.g. earflick only touches earFlick), so any field left over from
-// whatever behavior played *before* it - a still-partway rollAngle from a
-// rollover interrupted by a poke, a stuck legsTucked from a sit that got
-// cut short by the patrol edge - used to keep rendering every frame after.
-// A stray rollAngle rotates the whole creature around a pivot near its
-// body center on a canvas with almost no margin, so the tail (far to one
-// side) or the ears (at the top of a canvas only 80px tall) swing past the
-// canvas edge and get clipped; a stray legsTucked could shrink a leg's
-// drawn height to 0. Resetting on every transition (not just idle->walk,
-// which is all the original code did) means a new behavior always starts
-// from a known-zero baseline and only ever shows fields it's actually
-// driving.
-// ---------------------------------------------------------------------
-// lookDX/lookDY are the one exception to "every transition gets a clean
-// defaultPose()" above: they're not owned by any idle behavior's apply()
-// at all (see updateCursorAlertTrigger/applyCursorLookEasing) but by a
-// completely separate, always-running system driven by setCursorHint(),
-// so resetting them here would fight that system instead of protecting
-// against a stale value the way resetting rollAngle/legsTucked/etc. does.
-// Confirmed this mattered, not just in theory: without this preservation,
-// a species whose idle durations are short (earflick alone is 0.8-1.3s)
-// could cycle through several transitions before the cursor-look easing
-// (time-to-95%-converged ~0.5s at LOOK_EASE_RATE=6) ever finished
-// recovering from the previous reset, so lookDX sat well short of its
-// target (e.g. -0.13 instead of ~-0.8 after a full 2s of a steady cursor
-// hint) far more often than not - a visible sawtooth/stutter in the
-// tracking instead of a smooth follow.
-// Snapshots the pose about to be discarded (transitionFrom) and restarts
-// the crossfade clock (transitionElapsed) before resetting - see
-// applyPoseCrossfade below, called from update() every frame afterward to
-// blend from this snapshot toward whatever the new behavior computes,
-// instead of the instant pop a bare defaultPose() reset used to produce
-// (see CLAUDE.md - 포즈 전환이 뚝뚝 끊기는 문제). If a transition happens
-// again before the previous crossfade finished, this just re-snapshots
-// the CURRENT (still mid-blend) pose and restarts the timer - the blend
-// naturally chains from wherever it already was, no discontinuity.
+// Every entry into a new behavior goes through one of these two helpers.
+// The actual "start every field the current behavior doesn't touch from a
+// clean 0" guarantee (the fix for the tail/ear "cut off or gappy" glitch -
+// each idle behavior's apply() only sets the handful of pose fields it
+// actually cares about, e.g. earflick only touches earFlick, so anything
+// left over from whatever behavior played *before* it used to keep
+// rendering every frame after) now lives in update()'s own per-frame
+// `raw = defaultPose()` rebuild, not here - see its comment and the big
+// one above applyPoseCrossfade for the full story (round 5: that
+// per-transition reset used to happen HERE, via `anim.pose =
+// defaultPose()`, which is what let a crossfade-blended value leak back in
+// as the next frame's "current" value and get stuck forever for any field
+// not touched by every single idle behavior).
+// resetPose's only remaining job is bookkeeping for the crossfade: snapshot
+// the pose about to be discarded (transitionFrom) and restart the crossfade
+// clock (transitionElapsed) - see applyPoseCrossfade, called from update()
+// every frame afterward to blend from this snapshot toward whatever the
+// new behavior computes, instead of an instant pop (see CLAUDE.md - 포즈
+// 전환이 뚝뚝 끊기는 문제). If a transition happens again before the
+// previous crossfade finished, this just re-snapshots the CURRENT (still
+// mid-blend) anim.pose and restarts the timer - the blend naturally chains
+// from wherever it already was, no discontinuity.
 function resetPose(anim) {
-  const { lookDX, lookDY } = anim.pose;
   anim.transitionFrom = anim.pose;
   anim.transitionElapsed = 0;
-  anim.pose = defaultPose();
-  anim.pose.lookDX = lookDX;
-  anim.pose.lookDY = lookDY;
 }
 
 function enterIdle(anim, idle) {
@@ -1490,48 +1734,117 @@ function updateCursorAlertTrigger(anim, allowedToMove) {
 // Eases pose.lookDX/lookDY toward the current cursor hint (or back to 0 if
 // there isn't one / it's suppressed by sleep/held). Called AFTER
 // updateBehaviorState and the current idle's apply() in update() - the
-// same ordering updateTailFlavor already uses for tailPhase/tailAmp, and
-// for the same reason: any behavior transition this frame (an ordinary
-// idle-to-idle cycle, or updateCursorAlertTrigger's own enterIdle call)
-// resets the whole pose via defaultPose(), which would otherwise zero
-// lookDX/lookY for one frame and force them to re-converge from scratch -
-// running the easing afterward instead means a transition's reset gets
-// corrected within the very same frame, so the look-offset never visibly
-// blips back to center on every idle-pool reshuffle.
-function applyCursorLookEasing(anim, dt) {
+// same ordering updateTailFlavor already uses for tailPhase/tailAmp.
+// pose.lookDX/lookDY are in POSE_CONTINUITY_FIELDS (seeded from the
+// previous displayed pose by update() before this runs, see its comment)
+// specifically so THIS read-and-ease-toward-target line has a real
+// previous value to ease from every frame, transition or not - lookDX/
+// lookDY are the one pose field with no idle behavior of their own at
+// all, driven purely by this always-running easer.
+function applyCursorLookEasing(anim, pose, dt) {
   const suppressed = anim.pinnedSleep || anim.pinnedHeld;
   const hint = suppressed ? null : anim.cursorHint;
   const targetX = hint ? clamp(hint.dx, -1, 1) * LOOK_MAX : 0;
   const targetY = hint ? clamp(hint.dy, -1, 1) * LOOK_MAX : 0;
   const ease = 1 - Math.exp(-dt * LOOK_EASE_RATE);
-  anim.pose.lookDX = lerp(anim.pose.lookDX, targetX, ease);
-  anim.pose.lookDY = lerp(anim.pose.lookDY, targetY, ease);
+  pose.lookDX = lerp(pose.lookDX, targetX, ease);
+  pose.lookDY = lerp(pose.lookDY, targetY, ease);
 }
 
-// Crossfades the pose over the first POSE_TRANSITION_DURATION seconds
-// after a behavior transition, instead of the instant pop resetPose's
-// defaultPose() call used to produce on its own (see CLAUDE.md - 포즈
-// 전환이 뚝뚝 끊기는 문제). Called last in update(), after the current
-// idle's apply() (and updateTailFlavor/applyCursorLookEasing) have
-// already written this frame's target values into anim.pose - blends
-// every numeric field from the pre-transition snapshot (transitionFrom,
-// taken by resetPose) toward that target. Boolean fields (tailOverride)
-// and anything resetPose didn't have a numeric counterpart for are left
-// alone. A short 0.25s is enough to remove the visible snap without
-// making transitions feel sluggish - shorter than the shortest idle
-// duration in the roster (earflick's 0.8-1.3s) so it never eats a whole
-// behavior's screen time.
+// Crossfades the DISPLAYED pose (anim.pose) over the first
+// POSE_TRANSITION_DURATION seconds after a behavior transition, instead of
+// the instant pop a bare pose swap would produce (see CLAUDE.md - 포즈
+// 전환이 뚝뚝 끊기는 문제). `raw` is this frame's freshly computed target -
+// see update()'s own comment for why it has to be a separate object from
+// anim.pose rather than the same one mutated in place.
+//
+// BUG FIXED (round 5, issue 1 - "그루밍 후 발이 든 채로 고정됨"): the
+// previous version blended `anim.pose` toward ITSELF in place
+// (`anim.pose[key] = lerp(from[key], anim.pose[key], t)`), reading its own
+// `target` off the very same object it had just written the previous
+// frame's blended result into. For a field EVERY idle behavior sets every
+// frame (bodyBob, tailPhase - see updateContinuousGait/updateTailFlavor,
+// both unconditional every frame) this was invisible, since that fresh
+// write always overwrote whatever the crossfade left there. But for a
+// field only SOME idle behaviors set (frontLegRaise/groomWipe: groom
+// only; legsTuckedFront/Back: sit/sleep only, and only self-correcting via
+// gait decay for HOP-gait species - see POSE_CONTINUITY_FIELDS; cheekPuff,
+// noseTwitch, bellyUp, frontLegExtend, eyesClosed for idles that don't
+// explicitly clear it): once crossfade wrote it non-zero on the first
+// post-transition frame, the NEXT idle's apply() (not caring about that
+// field at all) left it untouched, so crossfade's own `target` on frame 2
+// read back its OWN frame-1 output instead of the true default (0) - both
+// `start` and `target` converged to the same stale non-zero value and
+// lerp produced that same value forever, for every transition from then on
+// (confirmed empirically: frontLegRaise stayed pinned at exactly 1.000
+// through 20+ subsequent idle changes in a driven simulation once groom
+// played even once). Once POSE_TRANSITION_DURATION elapsed, this function
+// stops touching the field at all (see the early return below), freezing
+// it at that stuck value permanently - "stops after some time and stays
+// stuck" is exactly the reported symptom.
+//
+// Fixed by never letting the crossfade write feed back into what a LATER
+// frame treats as "the target": `raw` (built fresh from defaultPose() every
+// single frame by update(), see its comment) is always the TRUE current
+// intent - 0 for any field the active idle doesn't touch, whatever the
+// idle explicitly sets otherwise - and this function only ever READS it,
+// writing the blended result into anim.pose (a plain snapshot object,
+// reassigned wholesale each call) instead of mutating raw. So frame 2's
+// `target` is always genuinely fresh, never contaminated by frame 1's
+// blend output, and any field the current idle doesn't set reliably
+// crossfades to 0 exactly once and stays there - the "next behavior still
+// has its foot up" bug can't recur for this or any future pose field
+// without the same self-poisoning mistake being reintroduced.
 const POSE_TRANSITION_DURATION = 0.25;
-function applyPoseCrossfade(anim, dt) {
-  if (anim.transitionElapsed >= POSE_TRANSITION_DURATION) return;
+export function applyPoseCrossfade(anim, raw, dt) {
+  // Round 10 issue 4 - spinAngle is deliberately unwrapped/multi-lap (see
+  // its own defaultPose comment: a single chasetail activation can leave it
+  // 15+ radians from zero), so a plain lerp between two spinAngle values
+  // from different behaviors (or the same behavior restarting at its own
+  // t=0) can sweep through many radians even though they represent nearby
+  // facings - that sweep, whether spread across this function's 0.25s blend
+  // window or (worse) landing in a single frame, is exactly the "snaps/
+  // whirls back" bug. Fixed with a PERSISTENT per-transition lap offset
+  // (not just a one-off blend-loop correction) added onto raw.spinAngle
+  // itself, computed once at the instant a transition begins (transitionElapsed
+  // is exactly 0 only on that first call) FROM a state that was also
+  // spin-driven (anim.transitionFrom.spinOverride) INTO a state that still
+  // is (raw.spinOverride) - the only combination where two different
+  // spinAngle continuums need reconciling at all. Doing it here, once, and
+  // baking it into `raw` itself (not just the blended output) means BOTH
+  // this function's own blend loop below AND its early-return path a few
+  // lines down (`anim.pose = raw` once the 0.25s window has elapsed) see
+  // the aligned value - an earlier version only special-cased the blend
+  // loop and left the early-return path assigning the raw, unaligned value
+  // verbatim the instant the crossfade finished, which just moved the same
+  // multi-radian snap from "spread over 0.25s" to "a single frame at
+  // t=0.25s" instead of actually fixing it (caught by
+  // test/diag-crossfade-spinangle-direct.mjs, which traces every frame
+  // including the one where the early-return first triggers).
+  if (anim.transitionElapsed === 0) {
+    anim.spinAngleLapOffset = (anim.transitionFrom.spinOverride && raw.spinOverride)
+      ? Math.PI * 2 * Math.round((anim.transitionFrom.spinAngle - raw.spinAngle) / (Math.PI * 2))
+      : 0; // no active spin idle on at least one side of the boundary - nothing to reconcile, and clearing here stops a stale offset from a much earlier spin idle leaking into some later, unrelated one
+  }
+  if (anim.spinAngleLapOffset) raw.spinAngle += anim.spinAngleLapOffset;
+
+  if (anim.transitionElapsed >= POSE_TRANSITION_DURATION) {
+    anim.pose = raw;
+    return;
+  }
   const t = clamp01(anim.transitionElapsed / POSE_TRANSITION_DURATION);
   const from = anim.transitionFrom;
-  for (const key in anim.pose) {
-    const target = anim.pose[key];
+  const blended = { ...raw }; // covers boolean/non-numeric fields (tailOverride) as a direct snap, no blending needed for those
+  for (const key in raw) {
+    const target = raw[key];
     const start = from[key];
     if (typeof target !== 'number' || typeof start !== 'number') continue;
-    anim.pose[key] = lerp(start, target, t);
+    // spinAngle needs no special-casing here anymore - the offset above
+    // already re-anchored raw.spinAngle to the nearest lap-equivalent of
+    // `start`, so a plain lerp between them is already the shortest path.
+    blended[key] = lerp(start, target, t);
   }
+  anim.pose = blended;
   anim.transitionElapsed += dt;
 }
 
@@ -1595,7 +1908,13 @@ function updateBehaviorState(anim, dt, allowedToMove) {
 // note in CLAUDE.md): legY must equal bodyY+bodyH exactly, so the leg hip
 // pivot starts right at the body's bottom edge instead of inside it.
 // ---------------------------------------------------------------------
-const SPECIES = {
+// Exported (in addition to being used internally) so the 3D voxel
+// prototype (windows/shared/voxel-engine.js, feature/3d-space branch)
+// can reuse the exact same per-species geometry/color data instead of
+// duplicating it - see CLAUDE.md's "3D 복셀 공간 실험" note. Purely
+// additive; nothing about the existing 2D engine's own use of this table
+// changes.
+export const SPECIES = {
   cat_a: {
     label: '고양이 A',
     sitStyle: 'loaf', // see IDLE_BEHAVIORS.sit - cats loaf-sit, all 4 legs tucked
@@ -1611,6 +1930,7 @@ const SPECIES = {
     ],
     earStyle: 'pointy', ear: { gap: 3, w: 3, h: 4, tipDX: 1, color: '#e8935a' },
     eye: { x: 20, y: 11, w: 2, h: 2 }, nose: { x: 22, y: 13, w: 1, h: 1 },
+    whiskers: true, // round 8 issue 2 - 3 fanned-out whisker boxes per cheek, see voxel-engine.js's buildWhiskers
     legFrontX: 15, legBackX: 6, legY: 19, legH: 3, legFrontW: 2, legBackW: 2, legColor: '#d9824a',
     hasTail: true, swishTail: true,
     tail: [{ x: 2, y: 14, w: 2, h: 2, color: '#e8935a' }, { x: 0, y: 12, w: 2, h: 2, color: '#e8935a' }, { x: 1, y: 10, w: 2, h: 2, color: '#e8935a' }],
@@ -1620,7 +1940,7 @@ const SPECIES = {
     // tail-tip flicking, stretching - see CLAUDE.md for the research this
     // roster's idlePools are based on. cat_a leans groom-heavy (a
     // fastidious tabby).
-    idlePool: [{ name: 'groom', weight: 3 }, { name: 'sit', weight: 2.5 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'groom', weight: 3 }, { name: 'sit', weight: 2.5 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'prowlcircle', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 1.5, lowerLen: 1.5, swingAmp: 18, kneeSwingAmp: 14, tuckHip: 15, tuckKnee: 125 },
       back: { upperLen: 1.6, lowerLen: 1.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 20, tuckKnee: 135 },
@@ -1649,14 +1969,68 @@ const SPECIES = {
     bodyColor: '#161616', darkColor: '#000000', eyeColor: '#b9cf4a',
     bodyX: 4, bodyY: 13, bodyW: 13, bodyH: 6,
     headX: 15, headY: 9, headW: 7, headH: 7,
+    // Round 17 issue 3 ("정면에서 V자 모양 흰 털... 옆모습에서도 자연스럽게") -
+    //
+    // Discovered while building this: the ORIGINAL (pre-round-17) belly -
+    // { x:6,y:16,w:10,h:3 } - was ALREADY invisible at the front pose,
+    // unrelated to anything new (confirmed by temporarily reverting to
+    // that exact literal object and re-rendering - still invisible). Root
+    // cause: at front pose local X becomes camera-DEPTH (round 16's own
+    // module comment), so a decal is only visible there if its OWN front
+    // (+X) edge reaches or exceeds whatever's directly in front of it -
+    // exactly the margin buildVoxelCreature's nose positioning already
+    // relies on (`Math.max(cfg.nose.x, snoutFrontX) + 0.05`). The old
+    // belly's front edge (x+w=16) fell a full unit short of the body's own
+    // front edge (bodyX+bodyW=17), so the body's own (black) front face
+    // won the depth test at every point - belly was rendering, just
+    // permanently hidden behind the body's own surface from this one
+    // angle. `w` below is widened so its front edge reaches (not just
+    // approaches) the body's own front edge - addSkinBoxRel's existing
+    // SKIN margin (~0.075/side, already relied on elsewhere in this file)
+    // supplies the small extra needed to actually win the tie. This part
+    // of round 17 is a genuine, still-valid fix - kept.
+    //
+    // Round 17 ALSO tried two ways to make this taper into an actual V
+    // shape when viewed from the front, both abandoned by round 18:
+    // (1) a genuine Z-taper (narrower Z-depth near the chin) turned out
+    // geometrically incompatible with staying visible from PROFILE at all
+    // (at profile pose local Z becomes the camera-depth axis instead, so a
+    // segment needs its OWN Z half-width to reach/exceed the part's own
+    // half-depth (~3 units) to be visible from the side - directly
+    // contradicting "narrow in Z near the chin"). (2) a depthTest:false
+    // front-cap "V-mask" (bodyColor planes painted back over the patch's
+    // outer edges, same plane technique as the neck seam) avoided that by
+    // never touching the underlying geometry - but round 18 found this
+    // created a visible ghosting/misalignment artifact ("흰 부분이 투명하게
+    // 비치는 것처럼") at the intermediate angles (225/315deg) where the
+    // mask is only partially visible: a flat PLANE's apparent width
+    // shrinks with a pure cosine falloff as it rotates away from face-on,
+    // but a BOX's apparent width (the decal underneath) grows differently
+    // at the same angles (its depth face starts showing too) - the two
+    // don't foreshorten the same way, so the mask's coverage silently
+    // stops lining up with the decal's actual edges anywhere off the exact
+    // front pose. Confirmed structural, not a settings/blend/render-order
+    // issue (screenshots at 225/315deg showed the same jumbled look with
+    // no overlap-with-neck-seam involved) - rolled back per round 18's own
+    // request rather than chasing a deeper fix. `snout`/`belly` stay at
+    // their round-17 full-width/full-depth shape (a plain rectangular
+    // white patch, not tapered) - correct and stable from every angle.
     snout: [
-      { x: 20, y: 12, w: 1.5, h: 2, color: '#ffffff' },
+      { x: 20, y: 12, w: 2, h: 2, color: '#ffffff' },
       { x: 19, y: 14, w: 3, h: 2, color: '#ffffff' },
     ],
-    belly: { x: 6, y: 16, w: 10, h: 3, color: '#ffffff' },
-    pattern: [{ x: 12, y: 13, w: 5, h: 3, color: '#ffffff' }],
+    belly: { x: 6, y: 16, w: 11, h: 3, color: '#ffffff' },
+    // No `pattern` field (round 4 issue 5) - the back/upper-body used to
+    // have a white patch here (y:13-16, above the chest), but the
+    // reference photo (see comment above) is explicit that the back is
+    // solid black with white confined to the chest/belly (still `belly`,
+    // untouched) and paw tips (still `pawColor`, untouched). A black
+    // patch would render identically to just leaving the body's own
+    // bodyColor (#161616) showing through, so this omits the field
+    // entirely rather than adding a same-color no-op patch on top.
     earStyle: 'pointy', ear: { gap: 3, w: 3, h: 4, tipDX: 1, color: '#161616' },
     eye: { x: 20, y: 11, w: 2, h: 2 }, nose: { x: 22, y: 13, w: 1, h: 1, color: '#d99a9e' },
+    whiskers: true,
     // legColor used to be pure white (the whole leg, thigh included) - the
     // reference photo (see comment above) is explicit that only the very
     // end of each leg (the paw) is white, the rest is body-black. Fixed by
@@ -1671,7 +2045,7 @@ const SPECIES = {
     tail: [{ x: 2, y: 14, w: 2, h: 2, color: '#161616' }, { x: 0, y: 12, w: 2, h: 2, color: '#161616' }, { x: -1, y: 9, w: 3, h: 3, color: '#161616' }],
     gait: 'walk', speed: 25,
     walkMin: 3.5, walkMax: 7.5,
-    idlePool: [{ name: 'groom', weight: 3 }, { name: 'sit', weight: 2.5 }, { name: 'tailtwitch', weight: 2 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'groom', weight: 3 }, { name: 'sit', weight: 2.5 }, { name: 'tailtwitch', weight: 2 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'prowlcircle', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 1.5, lowerLen: 1.5, swingAmp: 18, kneeSwingAmp: 14, tuckHip: 15, tuckKnee: 125 },
       back: { upperLen: 1.6, lowerLen: 1.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 20, tuckKnee: 135 },
@@ -1696,12 +2070,13 @@ const SPECIES = {
     ],
     earStyle: 'pointy', ear: { gap: 3, w: 3, h: 4, tipDX: 1, color: '#242320', color2: '#d97a34' },
     eye: { x: 20, y: 11, w: 2, h: 2 }, nose: { x: 22, y: 13, w: 1, h: 1 },
+    whiskers: true,
     legFrontX: 15, legBackX: 6, legY: 19, legH: 3, legFrontW: 2, legBackW: 2, legColor: '#faf3e6',
     hasTail: true, swishTail: true,
     tail: [{ x: 2, y: 14, w: 2, h: 2, color: '#faf3e6' }, { x: 0, y: 12, w: 2, h: 2, color: '#242320' }, { x: 1, y: 10, w: 2, h: 2, color: '#d97a34' }],
     gait: 'walk', speed: 24,
     walkMin: 3.5, walkMax: 7.5,
-    idlePool: [{ name: 'stretch', weight: 3 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'groom', weight: 2 }, { name: 'sit', weight: 2.5 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'stretch', weight: 3 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'groom', weight: 2 }, { name: 'sit', weight: 2.5 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'prowlcircle', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 1.5, lowerLen: 1.5, swingAmp: 18, kneeSwingAmp: 14, tuckHip: 15, tuckKnee: 125 },
       back: { upperLen: 1.6, lowerLen: 1.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 20, tuckKnee: 135 },
@@ -1722,7 +2097,37 @@ const SPECIES = {
     // real radial one - see CLAUDE.md) - darkest right around the eyes/
     // nose/mouth (default focus = eye position), lighter outward toward
     // the forehead/cheek edge as distance approaches `radius`.
-    faceShade: { highlight: '#a9825f', radius: 6.5 },
+    //
+    // Contrast/radius retuned (round 6 - "여전히 단색 진한 갈색 블록으로
+    //보임", the 3rd report of this exact complaint despite the 3D
+    // vertex-color gradient rendering correctly each time it was checked
+    // - see CLAUDE.md). The rendering pipeline was never the problem
+    // (confirmed yet again this round via full-canvas real-screenshot
+    // pixel scan: 54 distinct in-between shades genuinely present) - the
+    // OLD radius (6.5) is wider than the head's own diagonal (~9.9 units,
+    // but the farthest actual corner from the eye focus is only ~7.2
+    // units away), so the falloff never fully completes anywhere on the
+    // head - every pixel sits somewhere in a very gradual, low-contrast
+    // middle ground (neighboring grid cells differing by only 1-3 RGB
+    // units - each individual step is real but imperceptible, and the
+    // OLD highlight (#a9825f, only 77/60/41 RGB above headColor) capped
+    // the total available contrast even at full saturation). Retuned to
+    // a smaller radius (4, well under the corner distance) so the
+    // lightest area actually REACHES pure highlight over a real portion
+    // of the head instead of asymptotically approaching it, and a
+    // notably brighter highlight (bigger jump from headColor) so that
+    // saturated area reads as clearly lighter at a glance, not just
+    // "slightly less dark".
+    // Round 7 rewrite: this whole gradient is now painted as a canvas
+    // texture (voxel-engine.js's buildFaceShadeTexture), not interpolated
+    // from box vertices - see that function's own comment for why (a
+    // BoxGeometry, even heavily subdivided, structurally can't show a full
+    // 2D radial field on 4 of its 6 faces). `stripe` (new field, read only
+    // by the 3D texture painter - the 2D pxDitherRadial path ignores it,
+    // see drawCreature) is the cream forehead stripe between the ears,
+    // authored against assets/reference/siamese-real-photo.webp: centered
+    // horizontally, pinned to the very top of the head.
+    faceShade: { highlight: '#cdac7c', radius: 5.5, stripe: { color: '#e8d9bb', w: 2.2, h: 1.6 } },
     bodyX: 4, bodyY: 13, bodyW: 13, bodyH: 6,
     headX: 15, headY: 9, headW: 7, headH: 7,
     snout: null,
@@ -1730,12 +2135,13 @@ const SPECIES = {
     pattern: null,
     earStyle: 'pointy', ear: { gap: 3, w: 3, h: 4, tipDX: 1, color: '#5c4636' },
     eye: { x: 20, y: 11, w: 2, h: 2 }, nose: { x: 22, y: 13, w: 1, h: 1 },
+    whiskers: true,
     legFrontX: 15, legBackX: 6, legY: 19, legH: 3, legFrontW: 2, legBackW: 2, legColor: '#5c4636',
     hasTail: true, swishTail: true,
     tail: [{ x: 2, y: 14, w: 2, h: 2, color: '#e8d9bb' }, { x: 0, y: 12, w: 2, h: 2, color: '#5c4636' }, { x: 1, y: 10, w: 2, h: 2, color: '#5c4636' }],
     gait: 'walk', speed: 27,
     walkMin: 3.5, walkMax: 7.5,
-    idlePool: [{ name: 'sit', weight: 3 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'groom', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1.5 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'sit', weight: 3 }, { name: 'tailtwitch', weight: 2.5 }, { name: 'groom', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 1.5 }, { name: 'sleep', weight: 1 }, { name: 'prowlcircle', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 1.5, lowerLen: 1.5, swingAmp: 18, kneeSwingAmp: 14, tuckHip: 15, tuckKnee: 125 },
       back: { upperLen: 1.6, lowerLen: 1.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 20, tuckKnee: 135 },
@@ -1758,6 +2164,7 @@ const SPECIES = {
     pattern: null,
     earStyle: 'floppy', ear: { gap: 0, w: 3, h: 7, color: '#8a3f1f' },
     eye: { x: 21, y: 15, w: 2, h: 2 }, nose: { x: 23, y: 17, w: 1, h: 1 },
+    noseDetail: 'nostrils', // round 8 issue 2 - two small dark dots on the nose, see voxel-engine.js
     legFrontX: 17, legBackX: 4, legY: 21, legH: 2, legFrontW: 2, legBackW: 2, legColor: '#a8562e',
     hasTail: true, wagTail: true,
     tail: [{ x: 0, y: 17, w: 2, h: 2, color: '#a8562e' }],
@@ -1766,7 +2173,7 @@ const SPECIES = {
     // bouncing like everything else.
     gait: 'trot', speed: 30, gaitTuning: { bob: 0.35 },
     walkMin: 2.8, walkMax: 6,
-    idlePool: [{ name: 'sit', weight: 3 }, { name: 'earflick', weight: 2 }, { name: 'sleep', weight: 1.5 }, { name: 'stretch', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'sit', weight: 3 }, { name: 'earflick', weight: 2 }, { name: 'sleep', weight: 1.5 }, { name: 'stretch', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'chasetail', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 0.7, lowerLen: 0.7, swingAmp: 22, kneeSwingAmp: 16, tuckHip: 50, tuckKnee: 70 },
       back: { upperLen: 0.7, lowerLen: 0.7, swingAmp: 26, kneeSwingAmp: 20, tuckHip: 55, tuckKnee: 80 },
@@ -1789,6 +2196,7 @@ const SPECIES = {
     pattern: [{ x: 14, y: 15, w: 5, h: 4, color: '#f5ead9' }],
     earStyle: 'pointy', ear: { gap: 4, w: 4, h: 5, tipDX: 0.3, color: '#d9a15c', inner: '#f5ead9' },
     eye: { x: 21, y: 12, w: 2, h: 2 }, nose: { x: 23, y: 14, w: 1, h: 1 },
+    noseDetail: 'nostrils',
     legFrontX: 16, legBackX: 4, legY: 21, legH: 2, legFrontW: 2, legBackW: 2, legColor: '#f5ead9',
     hasTail: false,
     tail: null,
@@ -1800,7 +2208,7 @@ const SPECIES = {
     // bellyUp (see IDLE_BEHAVIORS.bellyUp) doesn't depend on a tail to
     // read - corgi has hasTail:false and none of bellyUp's fields
     // (bodySquash/bellyUp leg angle) reference the tail at all.
-    idlePool: [{ name: 'sit', weight: 3 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 2.5 }, { name: 'sleep', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'sit', weight: 3 }, { name: 'stretch', weight: 2 }, { name: 'earflick', weight: 2.5 }, { name: 'sleep', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'chasetail', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 0.6, lowerLen: 0.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 45, tuckKnee: 65 },
       back: { upperLen: 0.6, lowerLen: 0.6, swingAmp: 24, kneeSwingAmp: 18, tuckHip: 50, tuckKnee: 75 },
@@ -1824,6 +2232,7 @@ const SPECIES = {
     pattern: [{ x: 15, y: 12, w: 3, h: 6, color: '#e8e6e0' }],
     earStyle: 'pointy', ear: { gap: 3, w: 3, h: 5, tipDX: 0.5, color: '#5c6670', inner: '#e8e6e0' },
     eye: { x: 21, y: 10, w: 2, h: 2 }, nose: { x: 23, y: 12, w: 1, h: 1 },
+    noseDetail: 'nostrils',
     legFrontX: 16, legBackX: 5, legY: 20, legH: 3, legFrontW: 2, legBackW: 2, legColor: '#e8e6e0',
     hasTail: true, swishTail: false,
     tail: [
@@ -1838,7 +2247,7 @@ const SPECIES = {
     // startle already reads exactly like that, so this is weighted well
     // above the other dogs' earflick weight to make it this species'
     // signature move rather than an occasional aside.
-    idlePool: [{ name: 'earflick', weight: 3.5 }, { name: 'sit', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'sleep', weight: 1 }, { name: 'bellyUp', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'earflick', weight: 3.5 }, { name: 'sit', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'sleep', weight: 1 }, { name: 'bellyUp', weight: 1 }, { name: 'chasetail', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 1.1, lowerLen: 1.1, swingAmp: 24, kneeSwingAmp: 18, tuckHip: 48, tuckKnee: 68 },
       back: { upperLen: 1.1, lowerLen: 1.1, swingAmp: 28, kneeSwingAmp: 22, tuckHip: 53, tuckKnee: 78 },
@@ -1864,10 +2273,16 @@ const SPECIES = {
     bodyX: 4, bodyY: 11, bodyW: 14, bodyH: 10,
     headX: 15, headY: 8, headW: 7, headH: 7,
     snout: { x: 21, y: 11, w: 2, h: 2, color: '#c9a06a' },
+    // Round 17 issue 2 added a white belly patch here, round 18 replaced
+    // it with a lighter bodyColor tint instead - round 19 rolled BOTH
+    // attempts back out entirely per request (keep NECK_SEAM_SPECIES's
+    // addition, revert the chest back to having no belly field at all,
+    // its original pre-round-17 state).
     belly: null,
     pattern: [{ x: 13, y: 11, w: 4, h: 5, color: '#f7ecd5' }],
     earStyle: 'pointy', ear: { gap: 3, w: 2.5, h: 3, tipDX: 0.5, color: '#e8c896' },
     eye: { x: 20, y: 10, w: 2, h: 2 }, nose: { x: 22, y: 12, w: 1, h: 1 },
+    noseDetail: 'nostrils',
     legFrontX: 15, legBackX: 6, legY: 21, legH: 2, legFrontW: 2, legBackW: 2, legColor: '#e8c896',
     hasTail: true, swishTail: false,
     // Curled up over the back like the husky's, but shorter/more compact -
@@ -1882,7 +2297,7 @@ const SPECIES = {
     // the opposite tuning from the dachshund's flattened glide above.
     gait: 'trot', speed: 34, gaitTuning: { bob: 2.2 },
     walkMin: 2.5, walkMax: 5.5,
-    idlePool: [{ name: 'sit', weight: 3 }, { name: 'earflick', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'sleep', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'sit', weight: 3 }, { name: 'earflick', weight: 2.5 }, { name: 'stretch', weight: 2 }, { name: 'sleep', weight: 1.5 }, { name: 'bellyUp', weight: 1 }, { name: 'chasetail', weight: 1 }, { name: 'breathe', weight: 12 }],
     joints: {
       front: { upperLen: 0.6, lowerLen: 0.6, swingAmp: 20, kneeSwingAmp: 16, tuckHip: 40, tuckKnee: 100 },
       back: { upperLen: 0.6, lowerLen: 0.6, swingAmp: 24, kneeSwingAmp: 18, tuckHip: 45, tuckKnee: 110 },
@@ -1900,6 +2315,7 @@ const SPECIES = {
     pattern: [{ x: 5, y: 17, w: 4, h: 3, color: '#f5efe4' }],
     earStyle: 'long', ear: { gap: 1, w: 2, h: 6, color: '#f5efe4', inner: '#f0b9c6' },
     eye: { x: 18, y: 12, w: 2, h: 2 }, nose: { x: 20, y: 14, w: 1, h: 1 },
+    noseDetail: 'philtrum', // round 8 issue 2 - vertical groove below the nose, see voxel-engine.js
     legFrontX: 14, legBackX: 6, legY: 20, legH: 4, legFrontW: 2, legBackW: 3, legColor: '#f5efe4',
     hasTail: true, swishTail: false,
     tail: [{ x: 3, y: 15, w: 2, h: 2, color: '#ffffff' }],
@@ -1909,7 +2325,7 @@ const SPECIES = {
     // orienting toward a sound - distinct from the sharper earflick
     // startle) and nosetwitch (rapid sniffing) are this species' two
     // signature moves, weighted above the generic earflick/sit.
-    idlePool: [{ name: 'earalert', weight: 3 }, { name: 'nosetwitch', weight: 2.5 }, { name: 'sit', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'earalert', weight: 3 }, { name: 'nosetwitch', weight: 2.5 }, { name: 'sit', weight: 2 }, { name: 'earflick', weight: 1 }, { name: 'sleep', weight: 1 }, { name: 'hopspin', weight: 1 }, { name: 'breathe', weight: 12 }],
     // Rabbits fold at the hock, not the hip: the back leg is the one that
     // does almost all the work (big tuck range) while the front legs stay
     // short and nearly still - the opposite emphasis from cat/dog, where
@@ -1942,7 +2358,7 @@ const SPECIES = {
     cheeks: [{ x: 17, y: 12, w: 4, h: 4, color: '#f9e2ba' }],
     gait: 'scamper', speed: 26,
     walkMin: 1.8, walkMax: 3.8,
-    idlePool: [{ name: 'cheekpuff', weight: 3 }, { name: 'sit', weight: 2 }, { name: 'earflick', weight: 2 }, { name: 'sleep', weight: 1 }, { name: 'breathe', weight: 12 }],
+    idlePool: [{ name: 'cheekpuff', weight: 3 }, { name: 'sit', weight: 2 }, { name: 'earflick', weight: 2 }, { name: 'sleep', weight: 1 }, { name: 'wheelrun', weight: 1 }, { name: 'breathe', weight: 12 }],
     // Even shorter/stubbier than before - little legs barely peek out from
     // under the round body, and a near-zero neck fits the "head fused into
     // the body" hamster silhouette.
@@ -1987,6 +2403,11 @@ export function createAnimal(key) {
     // starting values off a missing object on the very first frame).
     transitionFrom: defaultPose(),
     transitionElapsed: POSE_TRANSITION_DURATION,
+    // See applyPoseCrossfade's spinAngle comment - persists across frames
+    // (not reset every transition, only recomputed at the START of one),
+    // 0 here matches transitionElapsed already being "no transition
+    // pending" at construction.
+    spinAngleLapOffset: 0,
   };
 
   const gaitFn = GAIT_PRESETS[spec.gait] || GAIT_PRESETS.walk;
@@ -2047,21 +2468,63 @@ export function createAnimal(key) {
       updateCursorAlertTrigger(anim, allowedToMove);
       const state = updateBehaviorState(anim, dt, allowedToMove);
       let advance = 0;
+
+      // This frame's raw/intended pose, built fresh from defaultPose()
+      // every single call - NOT anim.pose mutated in place. Only the
+      // continuity fields this species' own gait function actually decays
+      // (plus lookDX/lookDY, every species) are seeded from the current
+      // DISPLAYED pose first, so their own read-and-decay/ease logic below
+      // has real continuity to work with; every other field starts at 0
+      // and stays there unless the code below (gaitFn or the current
+      // idle's apply()) explicitly sets it THIS frame. This is what makes
+      // "a behavior that doesn't touch a field" reliably mean "that field
+      // is 0", every frame, not just on the transition frame - see
+      // applyPoseCrossfade's comment for the bug this fixes (round 5,
+      // issue 1), and LOOK_CONTINUITY_FIELDS's comment for why the gait
+      // half of this has to be species-specific, not a single fixed list.
+      const raw = defaultPose();
+      for (const key of LOOK_CONTINUITY_FIELDS) raw[key] = anim.pose[key];
+      for (const key of (spec.gait === 'hop' ? HOP_GAIT_FIELDS : CONTINUOUS_GAIT_FIELDS)) raw[key] = anim.pose[key];
+
+      // Round 9 issue 2 - the circular-path idles (prowlcircle/chasetail/
+      // hopspin/wheelrun) drive REAL leg motion via this species' own
+      // gaitFn (moving=true), same as the dormant 'walk' state does -
+      // WALKING_IDLE_NAMES is the only thing distinguishing them from
+      // every other idle, whose legs stay planted (moving=false, gaitFn's
+      // own decay branch). The returned advance is deliberately NOT
+      // assigned to the outer `advance` (which stays 0 here, same as any
+      // other idle) - these behaviors move through depthZ/lateralX
+      // (see their own apply()), not the old 2D x/direction patrol path,
+      // so there's nothing for a world-space stride distance to drive.
+      const isWalkingIdle = anim.currentIdle && WALKING_IDLE_NAMES.has(anim.currentIdle.name);
       if (state === 'walk') {
-        advance = gaitFn(anim, dt, true);
+        advance = gaitFn(anim, raw, dt, true);
       } else {
-        gaitFn(anim, dt, false);
-        if (anim.currentIdle) anim.currentIdle.apply(anim.pose, anim.behaviorTimer, anim.currentIdle.duration, anim.spec);
+        gaitFn(anim, raw, dt, isWalkingIdle);
+        if (anim.currentIdle) anim.currentIdle.apply(raw, anim.behaviorTimer, anim.currentIdle.duration, anim.spec);
       }
-      updateTailFlavor(anim, elapsed, state === 'walk');
-      applyCursorLookEasing(anim, dt);
-      applyPoseCrossfade(anim, dt); // last - blends the fully-computed pose above, see its comment
+      updateTailFlavor(raw, anim.spec, elapsed, state === 'walk');
+      applyCursorLookEasing(anim, raw, dt);
+      applyPoseCrossfade(anim, raw, dt); // last - blends transitionFrom -> raw, writes the result into anim.pose (see its comment)
       recordRotationDebug(anim, elapsed); // no-op unless setRotationDebug() was called - see its comment above
       return { advance };
     },
     draw(ctx) {
       drawShadow(ctx, spec);
       drawCreature(ctx, spec, anim.pose);
+    },
+    // getPose(): a LIVE reference (not a copy, unlike inspect() below) to
+    // anim.pose - added for the 3D voxel prototype (feature/3d-space
+    // branch, see CLAUDE.md's "관절/idle 시스템 3D 이식" note), whose own
+    // per-frame renderer reads this every frame and needs it fast/cheap,
+    // not a fresh object allocation each tick. createAnimal()/update() is
+    // otherwise 100% canvas-agnostic already - draw(ctx) above is the ONLY
+    // 2D-specific method on this returned object, so a 3D renderer can
+    // reuse the entire state machine/idle-behavior/cursor-tracking/pose-
+    // crossfade system unchanged and just read the pose it computes each
+    // frame via this instead of draw(ctx).
+    getPose() {
+      return anim.pose;
     },
     // Debug/test-only accessor (used by test/sim-invariants.mjs to log the
     // exact state around a flagged frame) - not used anywhere in the app

@@ -107,7 +107,21 @@ function createSettingsWindow() {
   });
   settingsWindow.setMenuBarVisibility(false);
   settingsWindow.loadFile(path.join(__dirname, 'windows', 'settings', 'index.html'));
-  settingsWindow.on('closed', () => { settingsWindow = null; });
+  settingsWindow.on('closed', () => {
+    settingsWindow = null;
+    // Revert any unsaved live character preview (see 'preview-character'
+    // below) back to whatever was actually last saved - `settings` here is
+    // only ever mutated by the 'save-settings' handler, so at this point it
+    // still holds the last-persisted value regardless of how many times the
+    // user clicked around the character grid without saving. Reuses the
+    // exact same 'settings-updated' channel/pet.js handler save already
+    // uses (pet.js only reloads if the character actually differs from
+    // what's currently showing), so this is a no-op whenever the settings
+    // window closes via Save (character already matches) and only does
+    // real work when it's closed some other way (the OS close button, etc.)
+    // after previewing but not saving.
+    if (petWindow) petWindow.webContents.send('settings-updated', settings);
+  });
 }
 
 function pickMessage() {
@@ -120,7 +134,8 @@ function fireReminder() {
   if (petWindow) {
     petWindow.webContents.send('reminder', {
       message: pickMessage(),
-      soundEnabled: settings.soundEnabled
+      soundEnabled: settings.soundEnabled,
+      soundVolume: settings.soundVolume
     });
   }
 }
@@ -290,6 +305,15 @@ ipcMain.on('close-settings', () => {
 
 ipcMain.on('open-settings', () => {
   createSettingsWindow();
+});
+
+// Live character preview (round 8) - relays a not-yet-saved character
+// pick straight to the pet window so it shows immediately, without
+// touching `settings`/settingsStore at all. The revert-if-not-saved side
+// of this lives in createSettingsWindow's 'closed' handler above, not
+// here - this handler is purely "forward whatever settings.js clicked".
+ipcMain.on('preview-character', (event, key) => {
+  if (petWindow) petWindow.webContents.send('preview-character', key);
 });
 
 ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {

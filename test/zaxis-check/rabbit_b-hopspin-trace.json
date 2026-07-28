@@ -1,0 +1,914 @@
+[
+ {
+  "name": "hopspin",
+  "t": 0.05,
+  "pose": {
+   "depthZ": 0.001699959058463945,
+   "lateralX": 0.01471703005869961,
+   "spinOverride": true,
+   "spinAngle": -0.33715926535897933,
+   "hopY": -0.05670376418469846,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.1,
+  "pose": {
+   "depthZ": 0.013498399221636563,
+   "lateralX": 0.05765014684197855,
+   "spinOverride": true,
+   "spinAngle": -0.7203185307179587,
+   "hopY": -0.8736876732715366,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.15000000000000002,
+  "pose": {
+   "depthZ": 0.044991283938996755,
+   "lateralX": 0.12519399433725817,
+   "spinOverride": true,
+   "spinAngle": -1.149477796076938,
+   "hopY": -2.121606289522509,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.2,
+  "pose": {
+   "depthZ": 0.10478737537931444,
+   "lateralX": 0.21149992069922718,
+   "spinOverride": true,
+   "spinAngle": -1.6246370614359174,
+   "hopY": -3.1993427335504414,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.25,
+  "pose": {
+   "depthZ": 0.20005865576080567,
+   "lateralX": 0.30871081957821,
+   "spinOverride": true,
+   "spinAngle": -2.1457963267948967,
+   "hopY": -3.4573257498789505,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.3,
+  "pose": {
+   "depthZ": 0.28011834595017404,
+   "lateralX": 0.33939911771928033,
+   "spinOverride": true,
+   "spinAngle": -2.2607963267948965,
+   "hopY": -2.046623723694331,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.35,
+  "pose": {
+   "depthZ": 0.3687191032214102,
+   "lateralX": 0.3545400788549137,
+   "spinOverride": true,
+   "spinAngle": -2.3757963267948963,
+   "hopY": -0.12159130478777178,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.39999999999999997,
+  "pose": {
+   "depthZ": 0.4631251785024916,
+   "lateralX": 0.3526520825499157,
+   "spinOverride": true,
+   "spinAngle": -2.4907963267948965,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.44999999999999996,
+  "pose": {
+   "depthZ": 0.5603789994221996,
+   "lateralX": 0.3327137293203714,
+   "spinOverride": true,
+   "spinAngle": -2.6057963267948967,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.49999999999999994,
+  "pose": {
+   "depthZ": 0.6573767470388325,
+   "lateralX": 0.2941945154165501,
+   "spinOverride": true,
+   "spinAngle": -2.720796326794896,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.5499999999999999,
+  "pose": {
+   "depthZ": 0.7509479111351284,
+   "lateralX": 0.23707327919650797,
+   "spinOverride": true,
+   "spinAngle": -2.8357963267948962,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.6,
+  "pose": {
+   "depthZ": 0.8379368660050687,
+   "lateralX": 0.16184393998567098,
+   "spinOverride": true,
+   "spinAngle": -2.9507963267948965,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.65,
+  "pose": {
+   "depthZ": 0.9152844573186782,
+   "lateralX": 0.06950836128569494,
+   "spinOverride": true,
+   "spinAngle": -3.0657963267948967,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.7000000000000001,
+  "pose": {
+   "depthZ": 0.9801075883469383,
+   "lateralX": -0.03844351458891181,
+   "spinOverride": true,
+   "spinAngle": -3.180796326794897,
+   "hopY": -1.464957181083697,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.7500000000000001,
+  "pose": {
+   "depthZ": 1.0297748406276335,
+   "lateralX": -0.16006580158723663,
+   "spinOverride": true,
+   "spinAngle": -3.2957963267948966,
+   "hopY": -3.0872144473270513,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.8000000000000002,
+  "pose": {
+   "depthZ": 1.061976258925711,
+   "lateralX": -0.29300031510508207,
+   "spinOverride": true,
+   "spinAngle": -3.410796326794897,
+   "hopY": -3.933633829582452,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.8500000000000002,
+  "pose": {
+   "depthZ": 1.0747855707914664,
+   "lateralX": -0.43453068528563077,
+   "spinOverride": true,
+   "spinAngle": -3.5257963267948966,
+   "hopY": -3.791504408767487,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.9000000000000002,
+  "pose": {
+   "depthZ": 1.0667132937369572,
+   "lateralX": -0.5816456393151888,
+   "spinOverride": true,
+   "spinAngle": -3.640796326794897,
+   "hopY": -2.696544270223782,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 0.9500000000000003,
+  "pose": {
+   "depthZ": 1.0367494035962457,
+   "lateralX": -0.7311099279784398,
+   "spinOverride": true,
+   "spinAngle": -3.755796326794897,
+   "hopY": -0.9239243071409654,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.0000000000000002,
+  "pose": {
+   "depthZ": 0.9843944906475101,
+   "lateralX": -0.8795411831491526,
+   "spinOverride": true,
+   "spinAngle": -3.870796326794897,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.0500000000000003,
+  "pose": {
+   "depthZ": 0.9096786094027033,
+   "lateralX": -1.0234908459320435,
+   "spinOverride": true,
+   "spinAngle": -3.985796326794897,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.1000000000000003,
+  "pose": {
+   "depthZ": 0.8131673268197359,
+   "lateralX": -1.159527203430426,
+   "spinOverride": true,
+   "spinAngle": -4.100796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.1500000000000004,
+  "pose": {
+   "depthZ": 0.6959547847933725,
+   "lateralX": -1.2843185180831276,
+   "spinOverride": true,
+   "spinAngle": -4.215796326794897,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.2000000000000004,
+  "pose": {
+   "depthZ": 0.5596439085652345,
+   "lateralX": -1.3947142285226233,
+   "spinOverride": true,
+   "spinAngle": -4.330796326794897,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.2500000000000004,
+  "pose": {
+   "depthZ": 0.4063142054763891,
+   "lateralX": -1.4878222450908762,
+   "spinOverride": true,
+   "spinAngle": -4.4457963267948974,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.3000000000000005,
+  "pose": {
+   "depthZ": 0.23847790065585964,
+   "lateralX": -1.5610804554496283,
+   "spinOverride": true,
+   "spinAngle": -4.560796326794898,
+   "hopY": -0.6857196598698329,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.3500000000000005,
+  "pose": {
+   "depthZ": 0.05902544044015583,
+   "lateralX": -1.6123206939063979,
+   "spinOverride": true,
+   "spinAngle": -4.675796326794897,
+   "hopY": -2.5120274899107393,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.4000000000000006,
+  "pose": {
+   "depthZ": -0.12883834636622782,
+   "lateralX": -1.6398236087980527,
+   "spinOverride": true,
+   "spinAngle": -4.790796326794897,
+   "hopY": -3.707045811061404,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.4500000000000006,
+  "pose": {
+   "depthZ": -0.32166591116547427,
+   "lateralX": -1.6423630811468264,
+   "spinOverride": true,
+   "spinAngle": -4.905796326794897,
+   "hopY": -3.970458431678235,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.5000000000000007,
+  "pose": {
+   "depthZ": -0.5158447625953562,
+   "lateralX": -1.6192390995166823,
+   "spinOverride": true,
+   "spinAngle": -5.020796326794898,
+   "hopY": -3.2360679774997703,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.5500000000000007,
+  "pose": {
+   "depthZ": -0.7076794983935341,
+   "lateralX": -1.5702982744388676,
+   "spinOverride": true,
+   "spinAngle": -5.135796326794898,
+   "hopY": -1.6884317398032993,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.6000000000000008,
+  "pose": {
+   "depthZ": -0.8934761277148754,
+   "lateralX": -1.4959414741815078,
+   "spinOverride": true,
+   "spinAngle": -5.250796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.6500000000000008,
+  "pose": {
+   "depthZ": -1.0696266622896642,
+   "lateralX": -1.3971183747597336,
+   "spinOverride": true,
+   "spinAngle": -5.365796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.7000000000000008,
+  "pose": {
+   "depthZ": -1.2326919466154063,
+   "lateralX": -1.2753090333608146,
+   "spinOverride": true,
+   "spinAngle": -5.4807963267948985,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.7500000000000009,
+  "pose": {
+   "depthZ": -1.3794807384229122,
+   "lateralX": -1.1324929081075537,
+   "spinOverride": true,
+   "spinAngle": -5.595796326794899,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.800000000000001,
+  "pose": {
+   "depthZ": -1.507123139959238,
+   "lateralX": -0.9711060506781716,
+   "spinOverride": true,
+   "spinAngle": -5.710796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.850000000000001,
+  "pose": {
+   "depthZ": -1.6131366160232177,
+   "lateralX": -0.793987484363757,
+   "spinOverride": true,
+   "spinAngle": -5.825796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.900000000000001,
+  "pose": {
+   "depthZ": -1.6954830128898855,
+   "lateralX": -0.6043160417227839,
+   "spinOverride": true,
+   "spinAngle": -5.940796326794898,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 1.950000000000001,
+  "pose": {
+   "depthZ": -1.7526152089433173,
+   "lateralX": -0.4055391667286534,
+   "spinOverride": true,
+   "spinAngle": -6.055796326794899,
+   "hopY": -1.8339978319067802,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.000000000000001,
+  "pose": {
+   "depthZ": -1.7835122777423107,
+   "lateralX": -0.20129538059325564,
+   "spinOverride": true,
+   "spinAngle": -6.170796326794898,
+   "hopY": -3.3286909014761106,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.0500000000000007,
+  "pose": {
+   "depthZ": -1.787702321301157,
+   "lateralX": 0.004667736434572451,
+   "spinOverride": true,
+   "spinAngle": -6.285796326794898,
+   "hopY": -3.986861419887023,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.1000000000000005,
+  "pose": {
+   "depthZ": -1.76527242884926,
+   "lateralX": 0.2085780867724259,
+   "spinOverride": true,
+   "spinAngle": -6.4007963267948975,
+   "hopY": -3.643106681555101,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.1500000000000004,
+  "pose": {
+   "depthZ": -1.7168655270127156,
+   "lateralX": 0.40672409948257837,
+   "spinOverride": true,
+   "spinAngle": -6.515796326794897,
+   "hopY": -2.383814578655821,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.2,
+  "pose": {
+   "depthZ": -1.6436642036913767,
+   "lateralX": 0.5955382435883568,
+   "spinOverride": true,
+   "spinAngle": -6.630796326794896,
+   "hopY": -0.5254537391725904,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.25,
+  "pose": {
+   "depthZ": -1.5473619022024305,
+   "lateralX": 0.7716770153585403,
+   "spinOverride": true,
+   "spinAngle": -6.745796326794896,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.3,
+  "pose": {
+   "depthZ": -1.4301221868916787,
+   "lateralX": 0.9320954901164792,
+   "spinOverride": true,
+   "spinAngle": -6.860796326794896,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.3499999999999996,
+  "pose": {
+   "depthZ": -1.294527068977505,
+   "lateralX": 1.0741146613259087,
+   "spinOverride": true,
+   "spinAngle": -6.975796326794895,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.3999999999999995,
+  "pose": {
+   "depthZ": -1.1435156449063426,
+   "lateralX": 1.195479964952199,
+   "spinOverride": true,
+   "spinAngle": -7.090796326794895,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.4499999999999993,
+  "pose": {
+   "depthZ": -0.9803145325638226,
+   "lateralX": 1.2944096011327062,
+   "spinOverride": true,
+   "spinAngle": -7.205796326794895,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.499999999999999,
+  "pose": {
+   "depthZ": -0.8083617876451902,
+   "lateralX": 1.3696315128064287,
+   "spinOverride": true,
+   "spinAngle": -7.320796326794894,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.549999999999999,
+  "pose": {
+   "depthZ": -0.631226138563047,
+   "lateralX": 1.4204081561286916,
+   "spinOverride": true,
+   "spinAngle": -7.435796326794893,
+   "hopY": -1.0808840871788674,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.5999999999999988,
+  "pose": {
+   "depthZ": -0.4525234896755721,
+   "lateralX": 1.4465484935388895,
+   "spinOverride": true,
+   "spinAngle": -7.550796326794893,
+   "hopY": -2.814058995279748,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.6499999999999986,
+  "pose": {
+   "depthZ": -0.27583270665670917,
+   "lateralX": 1.4484069500591672,
+   "spinOverride": true,
+   "spinAngle": -7.665796326794893,
+   "hopY": -3.840041833129282,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.6999999999999984,
+  "pose": {
+   "depthZ": -0.10461271295596457,
+   "lateralX": 1.4268693892486326,
+   "spinOverride": true,
+   "spinAngle": -7.780796326794892,
+   "hopY": -3.900996170020711,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.7499999999999982,
+  "pose": {
+   "depthZ": 0.057877107845681786,
+   "lateralX": 1.383326479542106,
+   "spinOverride": true,
+   "spinAngle": -7.895796326794892,
+   "hopY": -2.981603768571891,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.799999999999998,
+  "pose": {
+   "depthZ": 0.20865129154287482,
+   "lateralX": 1.3196351268238513,
+   "spinOverride": true,
+   "spinAngle": -8.010796326794893,
+   "hopY": -1.312914161448833,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.849999999999998,
+  "pose": {
+   "depthZ": 0.34506567140407307,
+   "lateralX": 1.2380689376088272,
+   "spinOverride": true,
+   "spinAngle": -8.125796326794891,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.8999999999999977,
+  "pose": {
+   "depthZ": 0.46487614381171155,
+   "lateralX": 1.141258942115328,
+   "spinOverride": true,
+   "spinAngle": -8.240796326794891,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.9499999999999975,
+  "pose": {
+   "depthZ": 0.56628742167049,
+   "lateralX": 1.0321260413772144,
+   "spinOverride": true,
+   "spinAngle": -8.355796326794891,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 2.9999999999999973,
+  "pose": {
+   "depthZ": 0.647990620986537,
+   "lateralX": 0.9138068416572467,
+   "spinOverride": true,
+   "spinAngle": -8.47079632679489,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.049999999999997,
+  "pose": {
+   "depthZ": 0.7091887991229171,
+   "lateralX": 0.7895746979518414,
+   "spinOverride": true,
+   "spinAngle": -8.585796326794888,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.099999999999997,
+  "pose": {
+   "depthZ": 0.7496098576119455,
+   "lateralX": 0.6627579024768151,
+   "spinOverride": true,
+   "spinAngle": -8.70079632679489,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.149999999999997,
+  "pose": {
+   "depthZ": 0.7695065308812786,
+   "lateralX": 0.5366570209300636,
+   "spinOverride": true,
+   "spinAngle": -8.815796326794889,
+   "hopY": -0.2835188209233545,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.1999999999999966,
+  "pose": {
+   "depthZ": 0.7696434973160059,
+   "lateralX": 0.4144633974263357,
+   "spinOverride": true,
+   "spinAngle": -8.930796326794887,
+   "hopY": -2.1842191831787146,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.2499999999999964,
+  "pose": {
+   "depthZ": 0.7512719630607994,
+   "lateralX": 0.2991808178652519,
+   "spinOverride": true,
+   "spinAngle": -9.045796326794889,
+   "hopY": -3.536010482537448,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.2999999999999963,
+  "pose": {
+   "depthZ": 0.7160923742199135,
+   "lateralX": 0.19355224189880257,
+   "spinOverride": true,
+   "spinAngle": -9.160796326794888,
+   "hopY": -3.9991784169380544,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.349999999999996,
+  "pose": {
+   "depthZ": 0.6662062022072496,
+   "lateralX": 0.0999933875608147,
+   "spinOverride": true,
+   "spinAngle": -9.275796326794886,
+   "hopY": -3.4573257498790344,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.399999999999996,
+  "pose": {
+   "depthZ": 0.6040580128970523,
+   "lateralX": 0.020534783092353272,
+   "spinOverride": true,
+   "spinAngle": -9.390796326794886,
+   "hopY": -2.046623723694485,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.4499999999999957,
+  "pose": {
+   "depthZ": 0.532369266456863,
+   "lateralX": -0.043226308315459074,
+   "spinOverride": true,
+   "spinAngle": -9.505796326794886,
+   "hopY": -0.12159130478794222,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.4999999999999956,
+  "pose": {
+   "depthZ": 0.454065495560191,
+   "lateralX": -0.09016292813907559,
+   "spinOverride": true,
+   "spinAngle": -9.620796326794887,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.5499999999999954,
+  "pose": {
+   "depthZ": 0.3721986701918789,
+   "lateralX": -0.1196435350359855,
+   "spinOverride": true,
+   "spinAngle": -9.735796326794885,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.599999999999995,
+  "pose": {
+   "depthZ": 0.28986667357131035,
+   "lateralX": -0.1315445916885808,
+   "spinOverride": true,
+   "spinAngle": -9.850796326794885,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.649999999999995,
+  "pose": {
+   "depthZ": 0.21013188300123228,
+   "lateralX": -0.12625033481119202,
+   "spinOverride": true,
+   "spinAngle": -9.965796326794884,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.699999999999995,
+  "pose": {
+   "depthZ": 0.13594087002231858,
+   "lateralX": -0.10463975155493321,
+   "spinOverride": true,
+   "spinAngle": -10.080796326794884,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.7499999999999947,
+  "pose": {
+   "depthZ": 0.07004720562184241,
+   "lateralX": -0.06806109928526408,
+   "spinOverride": true,
+   "spinAngle": -10.195796326794884,
+   "hopY": 0,
+   "legPhase": 0
+  }
+ },
+ {
+  "name": "hopspin",
+  "t": 3.7999999999999945,
+  "pose": {
+   "depthZ": 0.01493927911308277,
+   "lateralX": -0.01829461113723756,
+   "spinOverride": true,
+   "spinAngle": -10.310796326794883,
+   "hopY": -1.4649571810834685,
+   "legPhase": 0
+  }
+ }
+]
