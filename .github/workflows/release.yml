@@ -126,6 +126,40 @@ jobs:
 
       - run: npm ci
 
+      # Bug fix (v1.0.1's first real run: build-windows/build-mac both went
+      # green, but the exe/dmg landed on the OLD v1.0.0 release instead of
+      # the new v1.0.1 draft create-release had just made - confirmed via
+      # `gh run view --log`: electron-builder logged `publisher=Github (...
+      # version: 1.0.0)` and `uploading file=FocusPet-1.0.0-Setup.exe`, even
+      # though this run was building the v1.0.1 tag). Root cause:
+      # electron-builder computes the release tag it publishes to from
+      # package.json's OWN "version" field (tag = `v${version}`, since
+      # vPrefixedTagName defaults to true) - completely independent of
+      # `github.ref_name`/the actual git tag that triggered this workflow.
+      # package.json's committed version was still "1.0.0" (never bumped
+      # before the v1.0.1 tag was pushed), so electron-builder built/
+      # published as "1.0.0" and found+reused the OLD v1.0.0 release
+      # (already existing, still draft, from the very first test run) -
+      # silently the wrong release, not a skip or a failure, which is why
+      # both jobs still went green with nothing to show for it on v1.0.1.
+      # Rather than relying on remembering to bump package.json's version
+      # before every tag push (still worth doing for local `npm start`/
+      # `npm run build` accuracy - see README's own release steps - but
+      # this makes it not load-bearing for CI), this step overwrites
+      # package.json's version with whatever the pushed tag actually says
+      # right before the build runs, so electron-builder's own tag
+      # computation is always derived from the same source of truth
+      # (github.ref_name) create-release already used - the two can no
+      # longer drift apart. `shell: bash` is explicit here (Windows
+      # runners default `run:` to PowerShell, and this needs to be the
+      # exact same script as build-mac's copy below, not a re-implementation
+      # in a different shell language).
+      - name: Sync package.json version to the pushed tag
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          npm pkg set version="${TAG#v}"
+
       # electron-builder reads GH_TOKEN (not GITHUB_TOKEN - different env
       # var name) for its own GitHub publish step; secrets.GITHUB_TOKEN is
       # the token GitHub Actions provisions automatically for every run, no
@@ -147,6 +181,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Same fix as build-windows's own step above (see its longer comment
+      # for the full root-cause writeup) - keep these two in sync if this
+      # ever changes.
+      - name: Sync package.json version to the pushed tag
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          npm pkg set version="${TAG#v}"
 
       # No Apple Developer certificate in this repo, so code signing has to
       # be explicitly turned off rather than left to electron-builder's
