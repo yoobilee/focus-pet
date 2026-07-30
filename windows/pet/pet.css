@@ -19,9 +19,19 @@ html, body {
   height: 100%;
 }
 
+/* Ground gap ("공중에 떠 보임" fix): the sprite's feet now sit almost flush
+   with the window's own bottom edge, which is itself ground-anchored flush
+   with the taskbar's top edge (see main.js's groundWindowY) - previously
+   14px, reduced to 3px so the pet reads as standing ON the taskbar rather
+   than hovering above it. main.js's SPRITE_BOTTOM_INSET duplicates this
+   same value (no module boundary between main and the renderer, same
+   duplication pattern SPRITE_WIDTH already used) since it needs to know
+   exactly where the sprite's feet sit on screen for its own layout math
+   (groundWindowY); this file's own #bubble below also anchors off it
+   (bottom:101px) - keep all three in sync if this ever changes. */
 #pet-wrap {
   position: absolute;
-  bottom: 14px;
+  bottom: 3px;
   left: 0;
   width: 96px;
   height: 96px;
@@ -37,11 +47,26 @@ html, body {
   cursor: grab; /* pet.js switches this to 'grabbing' for the duration of a drag */
 }
 
+/* Reminder/poke speech bubble - merged back into the pet window (see
+   CLAUDE.md's "말풍선을 다시 펫 창에 내장" round for why the earlier
+   separate-BrowserWindow design was abandoned: two independently
+   DPI-rounded windows having to agree on-screen turned out to be its own
+   steady source of gap/centering bugs, not fewer than before the split).
+   A direct child of #stage (NOT nested inside the 96px-wide #pet-wrap -
+   the bubble needs to range far outside that, up to the full width of the
+   now much wider PET_SIZE window). pet.js's positionBubble() sets `left`
+   every frame the bubble is visible, clamped to stay within the window's
+   own (generous) bounds so it can shift away from a nearby screen edge
+   without ever needing to leave the window itself; `bottom` is a fixed
+   anchor since the sprite's own vertical position never moves (always
+   ground-anchored via #pet-wrap's own bottom:3px above). 101px =
+   SPRITE_BOTTOM_INSET(3) + sprite height(96) + a 2px gap above the
+   sprite's head - keep in sync with main.js's SPRITE_BOTTOM_INSET and
+   this file's own #pet-wrap height if either ever changes. */
 #bubble {
   position: absolute;
-  bottom: 84px;
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
+  left: 0;
+  bottom: 101px;
   max-width: 190px;
   width: max-content;
   background: #ffffff;
@@ -53,20 +78,21 @@ html, body {
   text-align: center;
   box-shadow: 0 6px 16px rgba(0,0,0,0.18);
   opacity: 0;
+  transform: scale(0.9);
   transition: opacity 0.25s ease, transform 0.25s ease;
-  pointer-events: none;
+  pointer-events: none; /* purely decorative - click-through is entirely alpha-sampled off #pet-canvas, this never needs to intercept anything */
 }
 
 #bubble::after {
   content: "";
   position: absolute;
   bottom: -8px;
-  /* --tail-shift (set by pet.js's positionBubble whenever the bubble box
-     itself gets shifted off-center to stay on screen - see pet.js) keeps
-     the tail pointing at the pet's actual position instead of at the
-     bubble's own (now off-center) middle. Defaults to 0px, i.e. dead
-     center, when unset. */
-  left: calc(50% + var(--tail-shift, 0px));
+  /* --tail-x (set by pet.js's positionBubble, in px from #bubble's own
+     left edge) keeps the tail pointing at the sprite's actual position
+     even when positionBubble has had to shift the whole bubble box to
+     keep it from running past the window's own edge - see its own
+     comment. Defaults to the box's own horizontal center when unset. */
+  left: var(--tail-x, 50%);
   transform: translateX(-50%);
   border-width: 8px 8px 0 8px;
   border-style: solid;
@@ -75,9 +101,5 @@ html, body {
 
 #bubble.show {
   opacity: 1;
-  transform: translateX(-50%) scale(1);
-}
-
-.hidden {
-  display: none;
+  transform: scale(1);
 }

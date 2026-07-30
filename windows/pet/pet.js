@@ -7,6 +7,8 @@ const VALID_KEYS = new Set(CHARACTERS.map((c) => c.key));
 const stageEl = document.getElementById('stage');
 const petWrapEl = document.getElementById('pet-wrap');
 const canvas = document.getElementById('pet-canvas');
+const bubbleEl = document.getElementById('bubble');
+const bubbleTextEl = document.getElementById('bubble-text');
 
 // 3D voxel renderer (feature/3d-space branch - replaces the earlier Canvas
 // 2D drawCreature() rendering entirely; see CLAUDE.md's "실제 pet 창에
@@ -40,44 +42,82 @@ camera.lookAt(0, CENTER_Y, 0);
 const gl = renderer.getContext();
 const pixelBuf = new Uint8Array(4);
 
-const bubbleEl = document.getElementById('bubble');
-const bubbleTextEl = document.getElementById('bubble-text');
-
 const WRAP_WIDTH = 96;
-const MARGIN = 16;
+// Mirrors main.js's PET_SIZE.width - only used as a pre-layout fallback
+// (stageEl.clientWidth reading 0 before the page has laid out) and as the
+// "before the very first main.js push arrives" default below.
+const PET_WINDOW_WIDTH_FALLBACK = 420;
+const PET_WINDOW_HEIGHT_FALLBACK = 400;
 
 let character = 'cat_a';
 let animal = null;
 let group = null; // current species' voxel-engine.js THREE.Group (see loadCharacter)
 let direction = 1; // 1 = right, -1 = left
-// Starts at the HORIZONTAL center of the stage, not MARGIN (the old
-// leftover value from when patrol still walked the pet back and forth
-// starting from its left edge - patrol itself is long gone, see the
-// "이동 정책 변경" history, but this initial value never got revisited
-// once `x` stopped changing on its own). `(stageEl.clientWidth||340 -
-// WRAP_WIDTH)/2` is exactly the midpoint of bounds()'s own [min,max]
-// range regardless of MARGIN, since MARGIN cancels out of that average -
-// same quantity, computed without relying on bounds() being hoisted
-// above this line for a reader skimming top-to-bottom. Vertical position
-// is deliberately left untouched (still the CSS `bottom:14px` ground
-// anchor pet.css sets on #pet-wrap) - centering the pet in the window's
-// vertical middle too would float it in mid-air with no ground for the
-// shadow/leg-tuck/sit poses to reference, which are all authored assuming
-// a fixed ground line, not an incidental design accident like the old
-// left-edge start was.
-let x = ((stageEl.clientWidth || 340) - WRAP_WIDTH) / 2;
+// The sprite's LOCAL horizontal offset within the (now much wider than the
+// sprite itself) window - see main.js's spriteWindowLayout/pushSpriteLocalX
+// for why this is no longer simply "always centered": the window is now
+// generously oversized so the embedded speech bubble always has room to
+// shift away from a nearby screen edge (CLAUDE.md's "말풍선을 다시 펫
+// 창에 내장" round), and how that extra width splits between the sprite's
+// left/right sides depends on how close the sprite currently is to a
+// screen edge - main.js computes that and pushes the result here (see
+// onSpriteLocalX below) every time it repositions the window. Starts
+// centered purely as a sane pre-launch default; onSpriteLocalX overwrites
+// this with the real value within a frame or two of the window loading (a
+// did-finish-load push from main.js, same "request the current value on
+// load" pattern getSettings() already uses below).
+let x = (PET_WINDOW_WIDTH_FALLBACK - WRAP_WIDTH) / 2;
+window.focusPetAPI.onSpriteLocalX((localX) => {
+  x = localX;
+});
 let paused = false; // true only while a reminder bubble is showing
 let asleep = false;
-let bubbleTimeout = null;
 let lastTs = null;
+
+// ---------------------------------------------------------------------
+// Pacing ("좌우 이동" movement mode) - the pet walks the taskbar edge to
+// edge, resting at each end before turning back. Unlike the old dormant
+// patrol block this replaces (see git history / CLAUDE.md), pacing moves
+// the WINDOW itself across the screen (via main.js's 'pace-move' IPC every
+// frame, see updatePacing/tick below) rather than pet.js's own local `x` -
+// `x` stays exactly where it currently is throughout a walk (only updated
+// by main.js's onSpriteLocalX push, which pacing doesn't trigger mid-leg -
+// see main.js's pace-move handler); it's the window's absolute screen
+// position that changes now, matching how dragging already works, not a
+// second, different "the sprite moves within a giant window" mechanism.
+//
+// pet.js owns every timing/direction DECISION (when to start walking, when
+// to rest, which way); main.js is purely a "move by this much, tell me if
+// you hit a screen edge" executor - see main.js's own comment on this for
+// why the actual per-frame movement amount has to come from here (the
+// gait's own `advance`, not a main-process-guessed constant speed).
+// ---------------------------------------------------------------------
+let movementMode = 'stationary'; // stationary | pacing - from settings.movementMode, see onSettingsUpdated/getSettings below
+let pacing = false; // true only while actively mid-leg (walking toward an edge) - false while resting at an edge or in stationary mode
+// Random rest duration at each end, in real seconds - "차분하게" per the
+// request: several tens of seconds walking (a full screen width at a
+// species' own walk speed already takes a while) plus a comparably long
+// rest, so direction changes are rare and unhurried rather than a
+// twitchy back-and-forth.
+const PACING_REST_MIN_MS = 30000;
+const PACING_REST_MAX_MS = 60000;
+let pacingRestUntil = performance.now() + 4000; // small initial delay so the pet doesn't immediately start walking the instant the page loads, even in pacing mode
 
 function safeNumber(v, fallback) {
   return Number.isFinite(v) ? v : fallback;
 }
 
+// Safety-clamp range for `x` (see the hard clamp at the bottom of tick()) -
+// not a "how far can x wander during a walk" range (pacing moves the
+// window instead of x - see the pacing block above) or a deliberate margin
+// choice (main.js's spriteWindowLayout already keeps x within a much
+// tighter, sensible range than this). Just guards against onSpriteLocalX
+// (or a future bug) ever leaving `x` at a NaN/out-of-bounds value by
+// keeping it somewhere the sprite is still fully inside the window:
+// [0, stageWidth-WRAP_WIDTH].
 function bounds() {
-  const stageWidth = stageEl.clientWidth || 340;
-  return { min: MARGIN, max: Math.max(MARGIN, stageWidth - WRAP_WIDTH - MARGIN) };
+  const stageWidth = stageEl.clientWidth || PET_WINDOW_WIDTH_FALLBACK;
+  return { min: 0, max: Math.max(0, stageWidth - WRAP_WIDTH) };
 }
 
 function loadCharacter(key) {
@@ -150,77 +190,146 @@ function knockNote(ctxA, freq, startAt, duration = 0.5, peak = 0.42) {
   partial.stop(t0 + duration + 0.05);
 }
 
-function playBeep(volume = 0.5) {
+// One AudioContext for the whole page's lifetime, created lazily on first
+// use and reused forever after - playBeep() used to `new AudioContext()`
+// on every single call and never close() the old one, which silently ran
+// into Chromium's per-page AudioContext cap (~6) after a handful of
+// notifications: every context past that limit is still constructible
+// (the `new` call itself doesn't throw) but never actually produces sound,
+// and playBeep's own try/catch swallows nothing here since nothing DOES
+// throw - it just goes quiet with no visible error, hence "works once,
+// then never again". Reusing a single context sidesteps the cap entirely
+// (this page never has more than one open).
+let sharedAudioContext = null;
+function getSharedAudioContext() {
+  if (!sharedAudioContext) {
+    sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioContext;
+}
+
+function computeBeepPeak(volume) {
+  // Clamp defensively - a hand-edited settings.json could carry any value,
+  // and this feeds directly into an audio gain (see knockNote's headroom
+  // comment - out-of-range input here is the one thing that could actually
+  // break that guarantee).
+  const safeVolume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0.5;
+  return 0.42 * safeVolume;
+}
+
+// Actually WAITS for resume() to settle before scheduling anything, rather
+// than firing the oscillators immediately and letting resume() "catch up"
+// later. That fire-and-forget approach (the previous version of this
+// function) rested on the assumption that Web Audio scheduling against a
+// still-suspended context's currentTime just works once resume() completes
+// - true enough in quick back-to-back testing, but the spec doesn't actually
+// guarantee it, and it's the most likely explanation for "plays once, then
+// silently never again" in real use: this window is focusable:false and
+// normally sits idle for the app's default 30-minute reminder interval
+// between plays - exactly the kind of prolonged inactivity Chromium's
+// background power-management can suspend an AudioContext over. Scheduling
+// ahead of an already-(re)suspended context under those conditions may
+// simply produce no audio, with nothing to catch: resume() still resolves,
+// the context still reports 'running' afterward, nothing throws - it just
+// goes quiet. Actually awaiting resume() first removes that gap.
+async function playViaContext(ctxA, peak) {
+  if (ctxA.state !== 'running') await ctxA.resume();
+  knockNote(ctxA, 185, 0, 0.5, peak);     // F#3-ish - low, wooden
+  knockNote(ctxA, 185, 0.16, 0.5, peak); // same pitch, a beat later - a repeated knock, not a rising melody
+}
+
+async function playBeep(volume = 0.5) {
+  const peak = computeBeepPeak(volume);
   try {
-    // Clamp defensively - a hand-edited settings.json could carry any
-    // value, and this feeds directly into an audio gain (see knockNote's
-    // headroom comment - out-of-range input here is the one thing that
-    // could actually break that guarantee).
-    const safeVolume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 0.5;
-    const peak = 0.42 * safeVolume;
-    const ctxA = new (window.AudioContext || window.webkitAudioContext)();
-    knockNote(ctxA, 185, 0, 0.5, peak);     // F#3-ish - low, wooden
-    knockNote(ctxA, 185, 0.16, 0.5, peak); // same pitch, a beat later - a repeated knock, not a rising melody
+    let ctxA = getSharedAudioContext();
+    // Some Chromium/OS power-management paths can end up closing a
+    // long-lived AudioContext out from under a window that's never focused
+    // (this app never calls close() itself) - discard and recreate rather
+    // than staying silently dead for the rest of the app's lifetime.
+    if (ctxA.state === 'closed') {
+      sharedAudioContext = null;
+      ctxA = getSharedAudioContext();
+    }
+    await playViaContext(ctxA, peak);
   } catch (e) {
-    // ignore audio errors silently
+    // The shared context (or its resume()) failed in some way this
+    // session - recreate once and retry, rather than silently going dead
+    // for every reminder afterward the way the un-caught version of this
+    // bug would.
+    try {
+      sharedAudioContext = null;
+      await playViaContext(getSharedAudioContext(), peak);
+    } catch (e2) {
+      // Truly nothing more to do here - ignore silently, same as before.
+    }
   }
 }
 
-// px of breathing room past the stage's own edge - NOT just the bubble
-// box's own footprint. #bubble's box-shadow (0 6px 16px) extends visually
-// past the box's geometric edges by roughly its 16px blur radius; the
-// original 4px margin only cleared the box itself, so once the bubble
-// was clamped close enough to the stage edge, the shadow's own blur
-// extended past x=0 and got hard-clipped by the stage's overflow:hidden -
-// a shadow that fades smoothly on 3 sides but gets sliced flat on the
-// 4th reads exactly like a stray gray smudge in that corner (confirmed by
-// screenshot comparison at margin=4 vs 20 - see CLAUDE.md; the tail
-// pointer itself was checked separately with a red debug fill and was
-// never actually misaligned, despite that being the original suspicion).
-const BUBBLE_SAFE_MARGIN = 20;
+// ---------------------------------------------------------------------
+// Reminder/poke speech bubble - back to being a plain DOM element inside
+// THIS window (see CLAUDE.md's "말풍선을 다시 펫 창에 내장" round for why
+// the earlier separate-BrowserWindow design was abandoned: two
+// independently DPI-rounded windows having to agree with each other on
+// screen position turned out to be its own steady source of the exact
+// gap/off-center bugs the split was meant to fix, not fewer than before
+// it). main.js's only remaining job re: the bubble is keeping PET_SIZE
+// generously oversized and telling pet.js where to render the sprite
+// within it (see onSpriteLocalX) - actually showing/positioning/fading the
+// bubble is entirely local to this file now, no IPC round trip needed.
+// ---------------------------------------------------------------------
+let bubbleVisible = false; // true from the moment a bubble starts showing until its fade-out finishes - gates the per-frame positionBubble() call in tick()
+let bubbleHideTimer = null;
+let bubbleFadeOutTimer = null;
+// px kept between the bubble's clamped left/right edges and the (generous)
+// window's own edges - purely aesthetic breathing room; with PET_SIZE this
+// wide the clamp below will rarely actually engage in practice.
+const BUBBLE_SAFE_MARGIN = 16;
 
-// #bubble is centered on the pet by default (pet.css's left:50%, relative
-// to the 96px-wide #pet-wrap), which never accounted for #pet-wrap's own
-// position within the wider 340px stage - so a pet parked near the left
-// edge (x near MARGIN) had its up-to-190px-wide bubble extend well past
-// stage x=0, clipped by the stage's overflow:hidden (see pet.css). No
-// clamp existed anywhere for this (checked both here and in pet.css)
-// despite it having been believed fixed - this is the actual fix: shift
-// the bubble box (via an inline `left` override) just far enough to keep
-// its full width within the stage, then counter-shift the tail pointer
-// (via the --tail-shift CSS variable) so it still points at the pet
-// itself rather than at the bubble's new, off-center middle.
+// Positions #bubble horizontally so it's centered on the sprite by default,
+// but clamped to stay within the window's own bounds (minus
+// BUBBLE_SAFE_MARGIN) if that would run it past the window's edge -
+// exactly the "shift the box, counter-shift the tail" approach this
+// project has used since the very first embedded-bubble version, just
+// computed in THIS window's local coordinate space again (rather than
+// across two windows' worth of screen coordinates, like the separate-
+// window version briefly had to). Vertical position needs no equivalent
+// clamping - see pet.css's #bubble{bottom:101px} comment for why that's a
+// fixed anchor, not something computed here.
 function positionBubble() {
-  const stageWidth = stageEl.clientWidth || 340;
-  const petCenterX = x + WRAP_WIDTH / 2; // pet-wrap's center, in stage-local coords - same quantity updateCursorHint uses
-  const bubbleWidth = bubbleEl.offsetWidth || 190; // offsetWidth needs the 'hidden' class already removed (see caller) to lay out correctly; 190 (the CSS max-width) is a reasonable fallback otherwise
-  const halfWidth = bubbleWidth / 2;
-  const minCenter = halfWidth + BUBBLE_SAFE_MARGIN;
-  const maxCenter = Math.max(minCenter, stageWidth - halfWidth - BUBBLE_SAFE_MARGIN);
-  const clampedCenterX = Math.max(minCenter, Math.min(maxCenter, petCenterX));
-  const shift = clampedCenterX - petCenterX; // 0 unless the pet is close enough to an edge that centering would clip
-  bubbleEl.style.left = `${WRAP_WIDTH / 2 + shift}px`;
-  bubbleEl.style.setProperty('--tail-shift', `${-shift}px`);
+  const spriteCenterX = x + WRAP_WIDTH / 2;
+  const bubbleWidth = bubbleEl.offsetWidth;
+  const stageWidth = stageEl.clientWidth || PET_WINDOW_WIDTH_FALLBACK;
+  const idealLeft = spriteCenterX - bubbleWidth / 2;
+  const minLeft = BUBBLE_SAFE_MARGIN;
+  const maxLeft = Math.max(minLeft, stageWidth - bubbleWidth - BUBBLE_SAFE_MARGIN);
+  const clampedLeft = Math.max(minLeft, Math.min(maxLeft, idealLeft));
+  bubbleEl.style.left = `${clampedLeft}px`;
+  // Kept within the box's own rounded corners (not flush with either
+  // edge) so the triangle never renders past the box's curvature.
+  const tailX = spriteCenterX - clampedLeft;
+  bubbleEl.style.setProperty('--tail-x', `${Math.max(20, Math.min(bubbleWidth - 20, tailX))}px`);
 }
 
 function showBubble(message, durationMs = 6000) {
   bubbleTextEl.textContent = message;
-  bubbleEl.classList.remove('hidden');
-  positionBubble(); // after 'hidden' is removed, so offsetWidth reflects the actual laid-out width of this message
+  bubbleVisible = true;
+  positionBubble(); // position BEFORE the fade-in starts, using the just-updated text's real laid-out width
   requestAnimationFrame(() => bubbleEl.classList.add('show'));
-
   paused = true;
-  if (bubbleTimeout) clearTimeout(bubbleTimeout);
-  bubbleTimeout = setTimeout(() => {
-    bubbleEl.classList.remove('show');
+  if (bubbleHideTimer) clearTimeout(bubbleHideTimer);
+  if (bubbleFadeOutTimer) clearTimeout(bubbleFadeOutTimer);
+  bubbleHideTimer = setTimeout(() => {
     paused = false;
-    setTimeout(() => bubbleEl.classList.add('hidden'), 250);
+    bubbleEl.classList.remove('show');
+    bubbleFadeOutTimer = setTimeout(() => {
+      bubbleVisible = false; // stop the per-frame positionBubble() calls once fully faded out
+    }, 250); // matches pet.css's own 0.25s opacity/transform transition
   }, durationMs);
 }
 
 // ---------------------------------------------------------------------
 // Click-through hit-testing. main.js defaults the whole window to
-// setIgnoreMouseEvents(true, {forward:true}) so the transparent 340x210
+// setIgnoreMouseEvents(true, {forward:true}) so the transparent PET_SIZE
 // rectangle never blocks clicks meant for whatever's behind it; forward
 // keeps mousemove reaching us anyway so we can decide, per-frame, whether
 // the cursor sits over an actually-drawn (non-transparent) pixel and
@@ -241,7 +350,7 @@ let hitState = null; // null until the first sample; then a plain boolean
 // Two layers:
 //   1. Always-on direction tracking: the head/eyes lean toward whichever
 //      side of the pet the cursor is currently on, screen-wide - not just
-//      while the cursor happens to be inside this 340x210 window. A plain
+//      while the cursor happens to be inside this small window. A plain
 //      renderer `mousemove` listener can only ever fire while the cursor
 //      is over this window (a blind spot the drag-follow poll in main.js
 //      already had to work around the same way - see 'drag-start' there),
@@ -291,12 +400,13 @@ function updateCursorHint() {
     return;
   }
   // Pet-wrap's on-screen box: left edge at `x` (the translateX below),
-  // bottom pinned 14px above the stage floor per pet.css - same box the
-  // click-through hit-test's canvas.getBoundingClientRect() would report,
-  // just computed directly since we only need its center here.
-  const stageHeight = stageEl.clientHeight || 210;
+  // bottom pinned 3px above the stage floor per pet.css's #pet-wrap -
+  // same box the click-through hit-test's canvas.getBoundingClientRect()
+  // would report, just computed directly since we only need its center
+  // here.
+  const stageHeight = stageEl.clientHeight || PET_WINDOW_HEIGHT_FALLBACK;
   const centerX = x + WRAP_WIDTH / 2;
-  const centerY = stageHeight - 14 - WRAP_WIDTH / 2;
+  const centerY = stageHeight - 3 - WRAP_WIDTH / 2;
   const dx = lastMouseClient.x - centerX;
   const dy = lastMouseClient.y - centerY;
   const dist = Math.hypot(dx, dy);
@@ -341,11 +451,12 @@ function updateCursorHint() {
 // flicker between, and render()'s existing ROTATION_EASE_RATE easing
 // already low-pass-filters any small jitter in the target itself.
 //
-// Called from tick() AFTER the movement/bounds block below - kept in the
-// same position updateBodyDirection used to occupy (harmless either way
-// now, since this no longer touches `direction` at all - see the dormant
-// patrol-bounce block's own comment for why `direction` itself is left
-// completely alone).
+// Called from tick() AFTER the movement/bounds block, and ONLY while not
+// actively pacing-walking - tick() overrides bodyRotationTargetY to face
+// the walk direction instead while `pacing` is true (a creature mid-stride
+// orients toward where it's going, not toward the cursor - see tick()'s own
+// comment). `direction` itself is read here indirectly only through that
+// override, never by this function.
 function updateBodyRotationTarget() {
   if (!lastMouseClient) return;
   const stale = performance.now() - lastMouseMoveAt > CURSOR_STALE_MS;
@@ -467,6 +578,17 @@ canvas.addEventListener('mousedown', (e) => {
   paused = true;
   if (animal) animal.setHeld(true); // squish-in, then dangling legs/tail/ears - see animal-engine.js
   canvas.style.cursor = 'grabbing';
+  // Being picked up always fully ends a pacing leg (rather than resuming it
+  // once released) - the user just manually repositioned the pet, so
+  // marching off again toward whatever edge the interrupted leg was headed
+  // for (which might now be behind it, or the wrong direction entirely)
+  // would look wrong; a fresh rest period lets the normal pacing decision
+  // pick a sensible direction from wherever the drag actually ends up.
+  if (pacing) {
+    pacing = false;
+    if (animal) animal.stopWalking();
+    pacingRestUntil = performance.now() + PACING_REST_MIN_MS + Math.random() * (PACING_REST_MAX_MS - PACING_REST_MIN_MS);
+  }
   window.focusPetAPI.dragStart({ offsetX: e.clientX, offsetY: e.clientY });
 });
 
@@ -492,7 +614,16 @@ window.addEventListener('mouseup', (e) => {
   // the following 'click' event, for both clicks of a double-click.
   const dx = e.clientX - dragStartClientX, dy = e.clientY - dragStartClientY;
   if (Math.hypot(dx, dy) > DRAG_MOVE_THRESHOLD) suppressNextClick = true;
-  window.focusPetAPI.dragEnd();
+  // Edge-snap (main.js's 'drag-end' handler) needs to know where the
+  // actual VISIBLE sprite sits on screen, not just where this window's own
+  // edges are - #pet-wrap (96x96) sits inset within the (now much wider)
+  // window at whatever offset `x` currently is (see onSpriteLocalX -
+  // possibly quite off-center, not necessarily "roughly centered"),
+  // anchored near the bottom. main process code has no visibility into
+  // this renderer-side layout, so it's sent along explicitly here rather
+  // than main.js guessing/hardcoding the offset.
+  const wrapRect = petWrapEl.getBoundingClientRect();
+  window.focusPetAPI.dragEnd({ left: wrapRect.left, top: wrapRect.top, width: wrapRect.width, height: wrapRect.height });
 });
 
 const POKE_REACTIONS = ['왜 불러요? 😳', '간지러워요! 😆', '네? 🐾', '헤헤 😊', '음냐...? 😽'];
@@ -614,6 +745,28 @@ function render(dt) {
   renderer.render(scene, camera);
 }
 
+// Starts/continues/rests a pacing leg - see the pacing state's own
+// top-level comment for the overall design. Doesn't touch `pacing` at all
+// while interrupted (bubble/drag/sleep) - just waits, since
+// animal-engine.js's own updateBehaviorState already forces idle
+// internally during any of those regardless of what this thinks it's
+// doing (allowedToMove=false, or pinnedSleep/pinnedHeld) - the SAME leg
+// picks back up once the interruption clears via the idempotent
+// startWalking() re-assertion below, rather than pet.js needing to detect
+// and react to the desync itself.
+function updatePacing(nowMs, allowedToMove) {
+  if (movementMode !== 'pacing') return;
+  if (!allowedToMove || dragging || asleep) return;
+  if (pacing) {
+    animal.startWalking(); // idempotent no-op if already walking - see its own comment in animal-engine.js for why this is safe/necessary to call every qualifying frame
+    return;
+  }
+  if (nowMs >= pacingRestUntil) {
+    pacing = true;
+    animal.startWalking();
+  }
+}
+
 function tick(ts) {
   if (lastTs === null) lastTs = ts;
   const dt = Math.min((ts - lastTs) / 1000, 0.05);
@@ -622,41 +775,83 @@ function tick(ts) {
   if (animal) {
     updateCursorHint();
     const allowedToMove = !paused;
+    // Decide whether to start/continue/rest a pacing leg BEFORE
+    // animal.update() runs, so a freshly-started leg's advance is already
+    // nonzero on this same frame - same ordering principle
+    // updateCursorAlertTrigger uses inside animal-engine.js (decide state
+    // transitions, then let the state machine/gait catch up in the same
+    // tick rather than a frame late).
+    updatePacing(ts, allowedToMove);
     const { advance } = animal.update(dt, allowedToMove, ts / 1000);
 
-    // advance is always 0 now - the engine never enters 'walk' on its own
-    // anymore (see animal-engine.js's movement-policy comment above
-    // enterWalk). This block is left in place rather than removed for the
-    // same reason: it costs nothing to sit dormant and is exactly what a
-    // future deliberate movement (e.g. "approach the cursor") would need,
-    // without pet.js and the engine getting out of sync about which one
-    // still knows how to move the pet.
-    if (allowedToMove) {
-      const safeAdvance = safeNumber(advance, 0); // already a per-frame px delta (gait fns multiply by dt internally) - do not multiply by dt again here
-      x = safeNumber(x + safeAdvance * direction, x);
-      const { min, max } = bounds();
-      if (x <= min) { x = min; direction = 1; }
-      else if (x >= max) { x = max; direction = -1; }
+    // Pacing movement moves the WINDOW (via main.js's 'pace-move' IPC), not
+    // pet.js's own local `x` - see the pacing state's own top-level comment
+    // for why this is a cleaner model than the old dormant "x += advance*
+    // direction, bounce at a local boundary" patrol block it replaces.
+    // advance is 0 whenever state!=='walk' (stationary mode never calls
+    // startWalking, so this is simply always a no-op there), so this is
+    // safe to leave unconditional on `pacing` alone.
+    if (pacing) {
+      const delta = safeNumber(advance, 0) * direction; // already a per-frame px amount (gait fns multiply by dt internally) - do not multiply by dt again here
+      if (delta !== 0) window.focusPetAPI.paceMove(delta);
     }
-    // Hard clamp regardless of the branch above - guards against NaN (which
-    // Math.min/max alone would NOT catch, since Math.min(NaN, n) is NaN)
-    // and against ever landing outside the visible window.
+    // Hard clamp - guards against NaN (which Math.min/max alone would NOT
+    // catch, since Math.min(NaN, n) is NaN) and keeps x sane regardless of
+    // any future bug in onSpriteLocalX's own input - see bounds()'s own
+    // comment for why this is just a safety net, not a movement range.
     const { min, max } = bounds();
-    x = Math.max(min, Math.min(max, safeNumber(x, MARGIN)));
-    updateBodyRotationTarget();
+    x = Math.max(min, Math.min(max, safeNumber(x, 0)));
+
+    if (pacing) {
+      // Face the walk direction instead of the cursor while actively
+      // mid-leg - a creature walking somewhere orients toward where it's
+      // going, not toward wherever the user's mouse happens to be. The
+      // head/eyes still track the cursor independently either way
+      // (animal-engine.js's lookDX/lookDY cursor-look, untouched by this -
+      // only the whole-body facing this drives is overridden).
+      bodyRotationTargetY = direction === 1 ? 0 : FACING_LEFT_Y;
+    } else {
+      updateBodyRotationTarget();
+    }
   }
 
   render(dt);
   processPendingMouse();
+  if (bubbleVisible) positionBubble();
   requestAnimationFrame(tick);
 }
 
 window.focusPetAPI.getSettings().then((settings) => {
   loadCharacter(settings.character);
+  movementMode = settings.movementMode || 'stationary';
 });
 
 window.focusPetAPI.onSettingsUpdated((settings) => {
   if (settings.character !== character) loadCharacter(settings.character);
+  if (settings.movementMode !== movementMode) {
+    movementMode = settings.movementMode || 'stationary';
+    // Switching away from pacing mid-leg needs an explicit stop - nothing
+    // else would ever tell the animal/main.js to end the walk (there's no
+    // edge to hit if the mode itself is what changed), so without this the
+    // pet would just keep walking under the old mode's rules forever.
+    if (movementMode !== 'pacing' && pacing) {
+      pacing = false;
+      if (animal) animal.stopWalking();
+    }
+  }
+});
+
+// Fired by main.js whenever a pacing move would cross a screen edge (see
+// its own 'pace-move' handler) - main.js is the only side that actually
+// knows where the screen edges are, so it owns this decision; pet.js just
+// reacts by ending the current leg and starting a rest period before the
+// next one (in the opposite direction).
+window.focusPetAPI.onPaceHitEdge((side) => {
+  if (!pacing) return; // stale - the leg already ended some other way (mode switched off, a drag interrupted it) before this notification arrived
+  pacing = false;
+  direction = side === 'right' ? -1 : 1; // turn back the other way for the next leg
+  animal.stopWalking();
+  pacingRestUntil = performance.now() + PACING_REST_MIN_MS + Math.random() * (PACING_REST_MAX_MS - PACING_REST_MIN_MS);
 });
 
 // Live, unsaved character preview from the settings window (round 8) -

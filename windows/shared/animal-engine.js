@@ -2443,6 +2443,50 @@ export function createAnimal(key) {
         enterIdle(anim, instantiateIdle('earflick'));
       }
     },
+    // External walk control (pet.js's "좌우 이동" pacing mode) - reuses the
+    // dormant enterWalk()/'walk' behaviorState substrate described above
+    // enterWalk's own comment, but with an EXTERNALLY-decided end point
+    // instead of enterWalk's own randomized walkMin/walkMax duration (that
+    // duration model was designed for the old "occasional short burst"
+    // patrol, not "walk continuously until the caller says stop, however
+    // long that takes at this species' speed"). duration:1e9 mirrors
+    // updateBehaviorState's own pinnedSleep idiom exactly (`{ name:'sleep',
+    // ..., duration: 1e9 }`) - "large enough that the internal timer-based
+    // cutoff never fires on its own; some external, explicit signal is the
+    // only thing that ends this" is already an established pattern here,
+    // not a new one.
+    //
+    // startWalking() is idempotent (no-ops if already in the 'walk' state)
+    // specifically so pet.js can call it unconditionally every frame it
+    // wants "currently walking" to be true, rather than needing to track
+    // whether it already issued the call - important because
+    // updateBehaviorState forces behaviorState back to 'idle' out from
+    // under a walk whenever allowedToMove is false (a reminder bubble
+    // showing) or pinnedSleep/pinnedHeld engage (system-idle doze, drag) -
+    // none of those paths know or care that pet.js considers itself
+    // "mid-walk", so once the interruption ends, pet.js just calls
+    // startWalking() again on the next qualifying frame and this resumes
+    // the SAME leg exactly where the gait left off, instead of pet.js
+    // needing to detect the desync and react. A non-idempotent version
+    // would call enterWalk()->resetPose() every such frame and pop the
+    // pose crossfade constantly while walking normally, breaking the very
+    // animation this exists to drive.
+    startWalking() {
+      if (anim.behaviorState === 'walk') return;
+      enterWalk(anim);
+      anim.walkDuration = 1e9;
+    },
+    // Ends an externally-driven walk leg (see startWalking) by handing off
+    // to the normal idle pool, exactly like a real walkDuration timeout
+    // would - the species' idlePool (including the Z-axis circular idles,
+    // prowlcircle/chasetail/hopspin/wheelrun - WALKING_IDLE_NAMES) is
+    // untouched by any of this and keeps getting picked from normally.
+    // No-op if not currently walking (e.g. an interruption already forced
+    // idle - see startWalking's own comment).
+    stopWalking() {
+      if (anim.behaviorState !== 'walk') return;
+      enterIdle(anim, pickIdleBehavior(anim.spec));
+    },
     // Cursor-reactive interaction (replaces the old autonomous patrol -
     // see the movement-policy comment above enterWalk): the caller (pet.js)
     // computes where the cursor is relative to the pet on screen and calls

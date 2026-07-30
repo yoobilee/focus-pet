@@ -1,42 +1,131 @@
+:root {
+  /* Neutral scale (warm-tinted, pairs with the pet roster's own warm
+     palette without competing with it) + a single coral-amber accent used
+     everywhere something is "on"/selected/primary - one accent color used
+     consistently (selected character card, checked radio row, toggle
+     switch, range fill, primary button) reads as more deliberate than the
+     old flat #e8a95a-everywhere brown/beige scheme. */
+  --bg: #f6f4f0;
+  --surface: #ffffff;
+  --surface-sunken: #f6f3ee;
+  --border: #ece7de;
+  --border-strong: #ded6c8;
+  --text: #211e1a;
+  --text-secondary: #726b5f;
+  --text-tertiary: #a89f8f;
+  --accent: #e8763a;
+  --accent-strong: #d5652b;
+  --accent-soft: #fdefe2;
+  --accent-border: #f3c9a3;
+  --shadow-card: 0 1px 2px rgba(40, 30, 15, 0.05), 0 1px 1px rgba(40, 30, 15, 0.03);
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 7px;
+}
+
 * {
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* only <main> scrolls - see its own rule; previously the whole page could ALSO grow past the fixed 420x560 window and trigger a second, outer OS-level scrollbar alongside main's own overflow-y:auto, showing two scrollbars a couple pixels apart */
   font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  background: #fbf9f6;
-  color: #2e2a26;
+  background: var(--bg);
+  color: var(--text);
 }
 
 header {
-  padding: 18px 22px 10px;
-  border-bottom: 1px solid #eee2d5;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 22px 14px;
+}
+
+.header-icon {
+  font-size: 18px;
+  line-height: 1;
 }
 
 header h1 {
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 700;
   margin: 0;
+  letter-spacing: -0.1px;
 }
 
 main {
-  padding: 14px 22px 6px;
-  max-height: 420px;
+  flex: 1 1 auto;
   overflow-y: auto;
+  padding: 4px 20px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* Standard scrollbar properties (Chromium 121+, which Electron 31 covers)
+     as a baseline - thin + a muted neutral track/thumb from the palette
+     instead of the default OS chrome. The ::-webkit-scrollbar rules below
+     take over rendering in Electron/Chromium and give finer control
+     (rounded thumb, hover state), but this keeps the same intent if that
+     ever changes. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
-section {
-  margin-bottom: 16px;
+main::-webkit-scrollbar {
+  width: 8px;
+}
+
+main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+main::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  /* Padding trick: a transparent border + background-clip:padding-box
+     shrinks the visible thumb inward from the track edges, so it reads as
+     a thin floating pill rather than a wall on the edge. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+main::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-border);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 16px 16px 18px;
 }
 
 .section-title {
   display: block;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #8a7a63;
-  margin-bottom: 6px;
-  letter-spacing: 0.2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
+
+.section-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: -6px 0 10px;
+}
+
+/* ---------- character grid ---------- */
 
 .char-grid {
   display: grid;
@@ -45,103 +134,316 @@ section {
 }
 
 .char-btn {
-  padding: 6px 4px 8px;
-  border-radius: 12px;
-  border: 2px solid transparent;
-  background: #f2e9dc;
+  position: relative;
+  padding: 8px 4px 9px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface-sunken);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
+}
+
+.char-btn:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(40, 30, 15, 0.08);
 }
 
 .char-btn canvas {
   width: 100%;
   aspect-ratio: 1 / 1;
   display: block;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  /* No longer image-rendering:pixelated/crisp-edges - these thumbnails are
+     now real antialiased WebGL snapshots of the 3D voxel model (see
+     settings.js's renderCharThumb), not the old flat-color 2D pixel-art
+     sprite this rule was originally tuned for; pixelating a smooth render
+     would just add jaggies that were never actually in the source image. */
 }
 
 .char-label {
   font-size: 10.5px;
-  color: #6b5a45;
+  color: var(--text-secondary);
   font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
 }
 
 .char-btn.selected {
-  border-color: #e8a95a;
-  background: #fdeecb;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
+
+.char-btn.selected .char-label {
+  color: var(--accent-strong);
+}
+
+.char-btn.selected::after {
+  content: "✓";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* ---------- radio rows (notification trigger mode) ---------- */
 
 .mode-options {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.radio-row, .checkbox-row {
+.radio-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.4;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.radio-row:hover {
+  background: var(--surface-sunken);
+}
+
+/* :has() (Chromium/Electron support this) highlights the whole row when
+   its own radio is checked, instead of just the tiny circle indicator -
+   the same "make the selected state obviously visible" goal the
+   character grid's .selected class serves, applied here too. */
+.radio-row:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.radio-row input[type="radio"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
   cursor: pointer;
 }
 
-input[type="number"], select, textarea {
+.radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.radio-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.radio-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ---------- sub-fields (number/select inputs nested inside a card) ---------- */
+
+.sub-field {
+  margin-top: 12px;
+}
+
+.sub-field.hidden {
+  display: none;
+}
+
+.field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+input[type="number"], textarea {
   width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #e2d5c2;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
   font-size: 13px;
   font-family: inherit;
-  background: #fff;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-input[type="range"] {
-  width: 100%;
-}
-
-#soundVolumeLabel {
-  margin-top: 10px;
+input[type="number"]:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 textarea {
   resize: vertical;
+  line-height: 1.5;
 }
 
+textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* ---------- toggle switch (replaces the plain checkbox) ---------- */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle-row-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.toggle input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border-strong);
+  border-radius: 999px;
+  transition: background 0.18s ease;
+}
+
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease;
+}
+
+.toggle input:checked + .toggle-track {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-track::after {
+  transform: translateX(16px);
+}
+
+.toggle input:focus-visible + .toggle-track {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- range slider (volume) ---------- */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  /* --fill (0%-100%, set from settings.js) splits the track into a solid
+     accent-colored "filled" portion and a neutral "remaining" portion,
+     directly on the input's own background - simpler than a separate
+     ::-webkit-slider-runnable-track override and works the same way. */
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--fill, 50%), var(--border-strong) var(--fill, 50%), var(--border-strong) 100%);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2.5px solid var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+input[type="range"]:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- footer buttons ---------- */
+
 footer {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 22px 18px;
-  border-top: 1px solid #eee2d5;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 
 button {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   font-size: 13px;
   cursor: pointer;
   font-weight: 600;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+button:active {
+  transform: translateY(1px);
 }
 
 button.primary {
-  background: #e8a95a;
+  background: var(--accent);
   color: #fff;
 }
 
-button.secondary {
-  background: #eee2d5;
-  color: #6b5a45;
+button.primary:hover {
+  background: var(--accent-strong);
 }
 
-#interval-section.hidden,
-#idle-section.hidden {
-  display: none;
+button.secondary {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}
+
+button.secondary:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
 }
