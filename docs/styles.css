@@ -243,8 +243,20 @@ a {
   text-underline-offset: 3px;
 }
 
-/* ---------- screenshot placeholder ---------- */
+/* ---------- screenshots ---------- */
 
+/* .media-frame is the shared "framed screenshot" shell (rounded corners,
+   border, shadow) - it deliberately does NOT set aspect-ratio itself
+   anymore, since the two real screenshots this now holds have very
+   different shapes (hero: screenshot-hero.png, ~1:1 · customize:
+   screenshot-settings.png, tall/portrait) and forcing one ratio onto both
+   would either crop or letterbox one of them badly. Each usage picks its
+   own ratio via .media-frame-hero / .media-frame-portrait below, matching
+   that specific image's real pixel dimensions exactly (read straight from
+   the PNG headers - 525x500 and 558x792) so there's no letterboxing OR
+   cropping in the common case, only as a safety net if a future
+   replacement image doesn't match perfectly (object-fit:contain below
+   handles that gracefully instead of stretching/distorting it). */
 .media-frame {
   position: relative;
   border-radius: var(--radius-lg);
@@ -252,49 +264,35 @@ a {
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  aspect-ratio: 4 / 3;
 }
 
-.media-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  padding: 24px;
-  background:
-    repeating-linear-gradient(135deg, var(--surface-sunken) 0 14px, var(--surface) 14px 28px);
-  border: 2px dashed var(--border-strong);
-  margin: 10px;
-  border-radius: calc(var(--radius-lg) - 6px);
+.media-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-.media-placeholder .glyph {
-  font-size: 40px;
-  line-height: 1;
+/* Hero screenshot (screenshot-hero.png, 525x500 - ratio 21:20, close to
+   square) - contain is a no-op visually here since the frame ratio
+   already matches the image exactly, but keeps a mismatched replacement
+   image safe (letterboxed, not cropped/distorted) if this ever gets
+   swapped. */
+.media-frame-hero {
+  aspect-ratio: 525 / 500;
 }
 
-.media-placeholder strong {
-  font-size: 15px;
-  color: var(--text-secondary);
+/* Settings screenshot (screenshot-settings.png, 558x792 - tall/portrait,
+   a real app window capture with a titlebar/buttons at fixed positions) -
+   capped at max-width so a portrait image doesn't stretch across a wide
+   grid column and blow up past its native ~558px width, which would just
+   look soft/pixelated for no benefit; centered within its column via the
+   parent .customize-media's flex centering (see below). */
+.media-frame-portrait {
+  aspect-ratio: 558 / 792;
+  width: 100%;
+  max-width: 320px;
 }
-
-.media-placeholder span {
-  font-size: 12.5px;
-  color: var(--text-tertiary);
-  max-width: 30ch;
-}
-
-/* To replace with a real screenshot/GIF later: delete the
-   <div class="media-placeholder">...</div> markup inside <div
-   class="media-frame"> in index.html and put
-   <img src="assets/screenshot.png" alt="FocusPet 스크린샷"> (or a <video>/
-   animated <img src="assets/demo.gif">) in its place - .media-frame's own
-   border/shadow/radius already fit a 4:3 screenshot without further
-   changes. */
 
 /* ---------- section shell ---------- */
 
@@ -413,6 +411,57 @@ section {
   color: var(--text-secondary);
   margin: 0;
   line-height: 1.6;
+}
+
+/* ---------- customize (settings screenshot spotlight) ---------- */
+
+.customize-inner {
+  display: grid;
+  /* Slightly narrower media column than the hero's 1.05fr/1fr split - a
+     tall portrait screenshot doesn't need (and shouldn't get) as much
+     horizontal room as the copy list next to it. */
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.customize-media {
+  display: flex;
+  justify-content: center;
+}
+
+.check-list {
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.check-list li {
+  position: relative;
+  padding-left: 30px;
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.check-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ---------- roster ---------- */
@@ -559,9 +608,28 @@ footer {
     gap: 36px;
   }
 
-  .media-frame {
+  /* Scoped to .hero-inner specifically (was a bare .media-frame selector,
+     which would also override .media-frame-portrait's own aspect-ratio
+     below once that class existed - a portrait UI screenshot forced into
+     16:10 would crop off most of the actual settings window). The hero's
+     own screenshot switches to a wider 16:10 crop here since the stacked
+     mobile layout has more width to work with than the desktop two-column
+     one; the portrait screenshot below keeps its native tall ratio at
+     every width instead - forcing it wider would just crop the settings
+     window's content, there's no "wider mobile crop" that makes sense for
+     a vertical screenshot. */
+  .hero-inner .media-frame {
     order: -1;
     aspect-ratio: 16 / 10;
+  }
+
+  .customize-inner {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .customize-media {
+    order: -1;
   }
 
   .feature-grid {
