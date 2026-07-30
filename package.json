@@ -41,7 +41,8 @@
       "identity": null
     },
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "releaseType": "draft"
     }
   },
   "dependencies": {

@@ -10,25 +10,111 @@ on:
     tags:
       - 'v*.*.*'
 
-# electron-builder's GitHub publish step needs write access to create the
-# Release and upload assets to it - GITHUB_TOKEN's default permission level
-# depends on the repo/org's own settings (newer repos default to read-only),
-# so this is set explicitly rather than relying on whatever the repo happens
-# to have configured.
+# electron-builder's GitHub publish step (and this workflow's own `gh
+# release` calls) need write access to create the Release and upload assets
+# to it - GITHUB_TOKEN's default permission level depends on the repo/org's
+# own settings (newer repos default to read-only), so this is set
+# explicitly rather than relying on whatever the repo happens to have
+# configured.
 permissions:
   contents: write
 
 jobs:
+  # Creates the (draft) GitHub Release ONCE, before either OS build starts -
+  # see this job's own steps for why. build-windows/build-mac both declare
+  # `needs: create-release` below, so neither one can start until this job
+  # has finished; they still run in PARALLEL with each other (no `needs`
+  # between the two of them), only this one shared prerequisite is common to
+  # both.
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth:0 (full history, not just the tagged commit) - needed
+      # to walk `git tag --sort=-v:refname` (every tag, not just this one)
+      # and `git log prevTag..thisTag` (the actual commit range) below;
+      # actions/checkout's default shallow (depth 1) clone would leave both
+      # of those with nothing to work with.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # "태그를 push하면, 그 태그와 바로 이전 태그 사이의 커밋 메시지들을
+      # 모아서 릴리즈 설명으로 자동 생성" - built as a plain commit-message
+      # diff between this tag and whichever tag immediately precedes it,
+      # rather than GitHub's own PR-based "generate release notes" feature
+      # (`gh release create --generate-notes`) - this repo has zero merge
+      # commits (checked via `git log --merges`, none found: every change
+      # so far has gone straight to main, not through a reviewed PR), and
+      # GitHub's auto-generated notes are built primarily around merged
+      # PRs, so for a PR-less history like this one it would likely render
+      # as a near-empty body (just a bare compare link) rather than
+      # anything useful to review. A raw commit-log diff is guaranteed to
+      # actually reflect what shipped, which is what the review step (this
+      # whole point of drafting first) needs to be useful for.
+      # --sort=-v:refname is git's own version-aware tag sort (not a plain
+      # string sort, which would incorrectly order e.g. v1.10.0 before
+      # v1.9.0) so "the tag right before this one" is found correctly even
+      # once version numbers go past a single digit.
+      - name: Generate release notes from the commit log since the previous tag
+        env:
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep -vFx "$CURRENT_TAG" | head -n1)
+          {
+            echo "## 이번 릴리즈에 포함된 변경 사항"
+            echo ""
+            if [ -z "$PREV_TAG" ]; then
+              echo "(첫 릴리즈라 이전 태그가 없어요 - $CURRENT_TAG까지의 전체 커밋 로그예요)"
+              echo ""
+              git log --pretty=format:'- %s (%h)' "$CURRENT_TAG"
+            else
+              git log --pretty=format:'- %s (%h)' "${PREV_TAG}..${CURRENT_TAG}"
+            fi
+            echo ""
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "**전체 변경 내역**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            fi
+          } > release-notes.md
+          cat release-notes.md
+
+      # "릴리즈를 처음엔 draft 상태로 생성" + this is the ONE place in the
+      # whole workflow that ever calls `gh release create` / lets
+      # electron-builder create a fresh release - see build-windows/
+      # build-mac's own comments for how they reuse this instead of each
+      # trying to create their own (the race condition the request asked
+      # to avoid). Idempotent (checks `gh release view` first) so
+      # re-running the whole workflow for the same tag - e.g. GitHub
+      # Actions' "Re-run all jobs" after a build-mac failure - doesn't die
+      # on "a release with this tag already exists" the second time
+      # through; it just reuses what's already there (still draft at that
+      # point, since nobody hits Publish until manual review happens on
+      # the Releases page).
+      - name: Create draft release (skips if one already exists for this tag)
+        env:
+          CURRENT_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$CURRENT_TAG" >/dev/null 2>&1; then
+            echo "Release $CURRENT_TAG already exists - leaving it as-is"
+          else
+            gh release create "$CURRENT_TAG" --draft --title "$CURRENT_TAG" --notes-file release-notes.md
+          fi
+
   # Windows and macOS build in two independent jobs with no `needs:` between
-  # them, so GitHub Actions runs them in parallel rather than one waiting on
-  # the other. Both publish (`--publish always`) to the SAME tag's GitHub
-  # Release - electron-builder's GitHub provider checks for (and reuses) an
-  # existing release for the tag rather than only ever trying to create a
-  # new one, so whichever job's upload lands first creates the release and
-  # the other just attaches its own artifact to it. This is the standard,
-  # widely-used electron-builder multi-OS release pattern, not something
-  # specific to this project.
+  # THEM (only on create-release above), so GitHub Actions still runs them
+  # in parallel with each other. Both publish (`--publish always`) to the
+  # SAME tag's GitHub Release - by the time either one starts, create-release
+  # has already guaranteed a draft release exists for this tag, and
+  # electron-builder's own GitHub publish step reuses any existing DRAFT
+  # release it finds matching the tag unconditionally (verified directly
+  # from node_modules/electron-publish/out/gitHubPublisher.js's
+  # getOrCreateRelease: `if (release.draft) { return release; }`, no further
+  # condition) - so neither job ever attempts to create a second release of
+  # its own, removing the race condition outright rather than just hoping
+  # timing works out.
   build-windows:
+    needs: create-release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +136,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-mac:
+    needs: create-release
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
