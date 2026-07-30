@@ -1111,7 +1111,17 @@ FocusPet 소개용 정적 페이지 — 순수 HTML/CSS, 빌드 스텝 없이 Gi
 
 **검증**: `LICENSE` 텍스트가 표준 MIT 문구와 정확히 일치하는지 재확인, README의 `<div>`/`<img>` 태그 균형을 스크립트로 확인(열림/닫힘 개수 일치), 두 `<img src="docs/assets/...">` 경로가 실제로 존재하는 파일을 가리키는지(`docs/assets/screenshot-hero.png`/`screenshot-settings.png`, 직전 라운드에서 이미 만든 파일 그대로 재사용) 확인. 실제 GitHub 렌더링(마크다운 프리뷰)까지는 이 환경에서 직접 못 봤음 — 문법 자체는 GitHub-flavored Markdown 표준 패턴(뱃지 `[![]()]()`, HTML `<img>`/`<div align="center">`)이라 렌더링 실패 위험은 낮다고 판단했지만, 실제 GitHub 페이지에서 배지/이미지가 의도대로 보이는지는 다음에 push된 뒤 확인이 필요.
 
+### `assets/reference/`를 git 추적에서 제외 (사용자 지시로 검증 스킵 — 파일 정리만)
+`assets/reference/`(캐릭터 디자인 참고용 원본 사진·과거 버그 스크린샷 모음, CLAUDE.md 여러 라운드에서 "실제로는 폴더에 없어서 스크린샷 자체를 못 봤다"는 식으로 자주 언급됐던 바로 그 폴더)를 앞으로는 git이 추적하지 않도록 처리. `.gitignore`에 `assets/reference/` 한 줄 추가 + `git rm -r --cached assets/reference/`로 기존에 추적되고 있던 14개 파일을 인덱스에서만 제거(로컬 디스크 파일은 안 건드림 — `--cached`가 정확히 그 보장을 해주는 플래그, 실제로 로컬에 남아있는 9개 파일이 명령 이후에도 디스크에 그대로 있는 것으로 확인함). git 히스토리(과거 커밋)는 손 안 댐 — 요청대로 "앞으로만" 추적 제외.
+
+**작업 중 발견한, 이 작업과 무관한 두 가지 (정직하게 기록, 손 안 댐)**:
+- 추적되고 있던 14개 파일 중 5개(`bubble-gap-still-125percent.png`/`bubble-gap-still-visible.png`/`bubble-old-embedded-reference.png`/`window-size-center.png`/`window-size-corner-snapped.png`)는 `git rm --cached` 실행 시점에 이미 로컬 디스크에서 사라진 상태였음(이번 명령이 지운 게 아님 — `--cached`는애초에 워킹트리 파일을 건드리지 않는 플래그라 삭제할 방법 자체가 없음, `git status`에서 이 5개는 `D ` — staged, 즉 "다음 커밋하면 인덱스에서 빠짐" — 로 나오는데, 이는 "원래 있었는데 이번에 지움"이 아니라 "이미 없던 걸 인덱스에서도 정리"였던 것). 아마 이전 세션의 QA 검증 과정에서 스크린샷을 지워놓고 커밋은 안 한 채로 남아있던 잔재로 추정.
+- `assets/app-icon-256.png`/`assets/tray-icon-16.png`(둘 다 `assets/reference/` 밖, 이번 작업과 무관한 파일)도 `git status`에 `git rm --cached` 이전부터 이미 워킹트리 삭제 상태(` D`, unstaged)로 잡혀 있었음 — 이번 세션에서 내가 지운 적 없는, 순수하게 이 작업 이전부터 있던 상태. 이번 요청 범위(`assets/reference/`만) 밖이라 손 안 대고 그대로 둠 — 사용자가 의도한 변경인지 확인이 필요하면 별도로 알려줄 것.
+
+**검증은 사용자 지시대로 스킵** — `git status`/`git ls-files`/`git check-ignore -v`로 (1) `assets/reference/` 안 14개 파일 전부 인덱스에서 빠졌는지, (2) 로컬 디스크에 남아있던 9개 파일이 실제로 그대로 남아있는지, (3) 새로 커밋될 파일들이 이제 `.gitignore` 규칙에 의해 무시되는지만 최소 확인 — 그 이상의 검증(실제 커밋/푸시, GitHub 상 반영 확인)은 하지 않음.
+
 ## 알려진 한계 / 다음에 다듬을 것
+- **(신규)** `assets/app-icon-256.png`/`assets/tray-icon-16.png`가 이번 `assets/reference/` 정리 작업 이전부터 이미 워킹트리에서 삭제된(unstaged) 상태로 있음 — 이번 세션이 지운 게 아니고 손도 안 댐, 사용자가 의도한 변경인지 다음에 확인 필요(의도한 거라면 그냥 커밋하면 되고, 아니라면 `git checkout -- assets/app-icon-256.png assets/tray-icon-16.png`로 복구 가능).
 - **(신규)** GitHub Pages 자체를 활성화(저장소 Settings → Pages → Source를 `main`/`docs` 폴더로 지정)하는 절차는 이번에 안 밟음 — 파일만 만들어뒀고, 실제로 `https://yoobilee.github.io/focus-pet/`(또는 커스텀 도메인)로 서빙되게 하려면 저장소 설정에서 한 번 켜야 함, 사용자 몫으로 남김.
 - **(신규)** README.md의 `release` shields.io 배지는 published 릴리즈가 하나도 없는 지금(v1.0.0/v1.0.1 둘 다 draft) 빈 값으로 보일 것 — 사용자가 draft 중 하나를 Publish하면 자동으로 채워짐, 별도 조치 불필요. README/LICENSE 둘 다 실제 GitHub 렌더링(마크다운 프리뷰, 배지 이미지 로드)은 아직 실물로 확인 안 함 — 다음 push 후 확인 필요.
 - **(갱신)** GitHub Actions 워크플로우 — 이번 라운드에서 실제 태그 push(v1.0.1) 한 번을 실제 로그로 진단해 "package.json version이 태그와 안 맞으면 electron-builder가 엉뚱한(오래된) release로 조용히 퍼블리시한다"는 구체적 버그를 하나 찾아 고침(버전 동기화 스텝 추가) — 그 외에도 여전히 실측 확인이 안 된 부분들: (1) `mac.identity: null` + `CSC_IDENTITY_AUTO_DISCOVERY=false` 조합이 실제 macos-latest 러너에서 서명 없이 dmg를 만들어내는지(이번 v1.0.1 로그에선 dmg 빌드/업로드 자체는 정상 진행됐던 것으로 보임 — 서명 실패로 죽지는 않았음 — 다만 "서명이 진짜로 안 걸려 있는지"까지는 별도 확인 안 함), (2) `release-notes.md`의 한글 커밋 메시지가 실제 GitHub Releases 페이지에서 인코딩 깨짐 없이 표시되는지(v1.0.1 draft를 `gh release view`로 다시 읽어봤을 땐 한글이 정상 표시됐음 — 꽤 긍정적인 신호지만 웹 UI에서 직접 본 건 아님), (3) 이번에 추가한 버전 동기화 스텝이 실제로 문제를 고치는지는 다음 태그 push 전까진 확정 못 함(재현 확인 미완료) — 전부 다음 실제 태그 push 때 확인 필요.
