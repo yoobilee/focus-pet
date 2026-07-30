@@ -8,6 +8,7 @@
 [![License](https://img.shields.io/github/license/yoobilee/focus-pet?color=green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](https://github.com/yoobilee/focus-pet/releases/latest)
 [![UI Language](https://img.shields.io/badge/UI-한국어-blue)](#)
+[![Website](https://img.shields.io/badge/website-yoobilee.github.io%2Ffocus--pet-e8763a)](https://yoobilee.github.io/focus-pet/)
 
 <img src="docs/assets/screenshot-hero.png" width="480" alt="화면 위에 떠서 말풍선으로 알림을 보여주는 FocusPet" />
 
@@ -27,6 +28,8 @@
 - **세세한 커스터마이징** — 캐릭터 · 알림 방식/간격 · 소리 볼륨 · 이동 방식 · Windows 시작 시 자동 실행까지 설정 창 하나에서
 
 <img src="docs/assets/screenshot-settings.png" width="300" alt="캐릭터, 알림 방식, 소리 등을 조절하는 FocusPet 설정 창" />
+
+더 자세한 소개와 스크린샷은 [웹사이트](https://yoobilee.github.io/focus-pet/)에서도 확인할 수 있어요.
 
 ## 다운로드
 
