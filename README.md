@@ -1,86 +1,55 @@
+<div align="center">
+
 # 🐾 FocusPet
 
-컴퓨터로 작업하거나 공부할 때, 화면 한쪽 구석에 앉아 있다가 정해진 방식대로 집중하라고 알려주는 데스크탑 펫 앱입니다.
-브라우저 탭이 아니라 **어떤 프로그램을 켜놓고 있어도** (강의 영상 전체화면 포함) 항상 화면 위에 떠 있습니다.
+작업하거나 공부할 때 화면 한쪽에 앉아있다가, 정해둔 방식으로 집중하라고 알려주는 Windows/macOS 데스크탑 펫
+
+[![Release](https://img.shields.io/github/v/release/yoobilee/focus-pet?label=release&color=e8763a)](https://github.com/yoobilee/focus-pet/releases/latest)
+[![License](https://img.shields.io/github/license/yoobilee/focus-pet?color=green)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)](https://github.com/yoobilee/focus-pet/releases/latest)
+[![UI Language](https://img.shields.io/badge/UI-한국어-blue)](#)
+
+<img src="docs/assets/screenshot-hero.png" width="480" alt="화면 위에 떠서 말풍선으로 알림을 보여주는 FocusPet" />
+
+</div>
+
+다른 프로그램을 아무리 켜놔도 — 전체화면 강의 영상 위에도 — 항상 화면 위에 떠 있어요. 실시간 3D로 렌더링되는 캐릭터가 커서를 졸졸 따라 쳐다보고, 손으로 집어 옮길 수도 있고, 정해둔 방식대로 "집중하세요"라고 알려줍니다.
 
 ## 특징
 
-- **캐릭터 선택**: 고양이 / 강아지 / 토끼 / 판다 / 햄스터 중 선택
-- **알림 방식 2가지 + 혼합**
-  - 고정 간격: N분마다 무조건 알림 (강의처럼 입력이 적은 작업에 적합)
-  - 활동 감지: 키보드/마우스 입력이 없을 때만 알림 (문서·엑셀 작업 중 딴짓 감지)
-  - 둘 다 동시에 사용 가능
-- 전체화면 위에도 항상 표시 (`screen-saver` 레벨 always-on-top)
-- 트레이 아이콘으로 일시정지 / 펫 숨기기 / 설정 / 종료
-- 말풍선 알림 + 효과음 (선택)
-- 펫 위치(네 모서리 중 선택) 변경 가능
+- **10종 캐릭터** — 고양이 4종(태비 · 턱시도 · 삼색이 · 샴), 강아지 4종(닥스훈트 · 코기 · 허스키 · 포메라니안), 토끼, 햄스터 중 선택
+- **실시간 3D 렌더링** — 정지 이미지가 아니라 각진 복셀(voxel) 스타일 3D 모델이 회전하며 그루밍 · 앉기 · 낮잠 같은 종별 행동을 재생
+- **커서 반응형 상호작용** — 화면 어디에 마우스가 있든 고개를 돌려 쳐다보고, 가까이 다가가면 귀를 쫑긋 세우는 등 종마다 다르게 반응
+- **알림 트리거 방식 선택** — 정해진 시간마다 알려주는 고정 간격, 키보드 · 마우스 입력이 끊기면 알려주는 활동 감지 중 상황에 맞게 설정
+- **언제나 최상단 표시** — 전체화면 강의 영상을 틀어놔도 항상 화면 위에 떠 있어서 가려지지 않음
+- **손으로 집어 옮기기** — 드래그 이동, 화면 가장자리 자석 스냅, 좌우로 왕복하는 페이싱 모드
+- **말풍선 알림 + 효과음** — 스누즈(10분 뒤 다시), 오늘 하루만 알림 끄기
+- **세세한 커스터마이징** — 캐릭터 · 알림 방식/간격 · 소리 볼륨 · 이동 방식 · Windows 시작 시 자동 실행까지 설정 창 하나에서
 
-## 실행 방법
+<img src="docs/assets/screenshot-settings.png" width="300" alt="캐릭터, 알림 방식, 소리 등을 조절하는 FocusPet 설정 창" />
+
+## 다운로드
+
+[**GitHub Releases에서 최신 버전 받기**](https://github.com/yoobilee/focus-pet/releases/latest) — Windows(`.exe`)와 Mac(`.dmg`) 모두 무료로 제공됩니다.
+
+- **Windows**: 설치 파일을 실행하면 "Windows가 PC를 보호했습니다"라는 SmartScreen 경고가 뜰 수 있어요(서명 인증서 없이 배포되는 앱이라 나오는 정상적인 경고입니다) — **추가 정보** → **실행**을 누르면 설치됩니다.
+- **macOS**: 애플 개발자 서명 없이 빌드돼서, 처음 열 때 "손상되었기 때문에 열 수 없습니다"라는 경고가 뜰 수 있어요. 터미널에서 아래 명령을 한 번 실행하면 해결됩니다.
+
+  ```bash
+  xattr -cr /Applications/FocusPet.app
+  ```
+
+## 로컬에서 실행하기
 
 ```bash
+git clone https://github.com/yoobilee/focus-pet.git
 cd focus-pet
 npm install
 npm start
 ```
 
-실행하면 화면 모서리에 펫이 뜨고, 시스템 트레이에 아이콘이 생깁니다.
-펫 위에 마우스를 올리면 우측 상단에 톱니바퀴(⚙️) 버튼이 나타나요 — 클릭하면 설정 창이 열립니다.
+설치 파일을 직접 만들고 싶다면 `npm run build`(지금 빌드를 돌리는 OS용으로 `dist/`에 생성)를 쓰세요. 버전 태그(`git tag vX.Y.Z && git push origin vX.Y.Z`)를 push하면 GitHub Actions가 Windows/Mac 빌드를 자동으로 만들어 Releases에 draft로 올려줍니다.
 
-## 배포용 설치파일 만들기 (로컬에서 직접, 선택)
+## 라이선스
 
-평소에 이 프로젝트 폴더를 열어서 `npm start` 하는 대신, 더블클릭으로 실행되는 설치파일을 만들고 싶다면:
-
-```bash
-npm run build
-```
-
-`electron-builder`가 지금 빌드를 돌리는 OS에 맞는 설치파일(Windows는 `.exe`, Mac은 `.dmg`)을 `dist/` 폴더에 만들어줍니다.
-Mac용 빌드는 macOS에서만 만들 수 있으니, Windows 개발 환경에서 두 OS를 모두 배포하려면 아래 GitHub Actions 자동 빌드를 쓰세요.
-설정 창의 "Windows 시작 시 자동 실행" 토글을 켜면 부팅 시 자동 실행되게 할 수 있어요.
-
-## 새 버전 배포하기 (GitHub Releases, 자동 빌드)
-
-`main.js`/`package.json` 등을 수정한 뒤 새 버전을 배포하고 싶으면, 버전 태그를 push하기만 하면 됩니다 — Windows/Mac 빌드가 `.github/workflows/release.yml`(GitHub Actions)을 통해 각각 `windows-latest`/`macos-latest` 러너에서 자동으로, 서로 독립적으로(병렬로) 만들어져서 같은 GitHub Release에 자동으로 첨부됩니다. Mac 빌드는 이 저장소에 서명(코드사인) 인증서가 없어서 서명 없이(unsigned) 만들어집니다 — 아래 "Mac에서 처음 실행할 때" 안내를 참고하세요.
-
-```bash
-# 1. package.json의 "version" 필드를 새 버전으로 올리고 커밋
-git add package.json
-git commit -m "v1.0.1"
-
-# 2. 그 버전에 해당하는 태그를 만들어서 push (태그는 반드시 v로 시작해야 트리거됨)
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-태그를 push하면 GitHub Actions가 자동으로 시작되고, 두 OS 빌드가 모두 끝나면 저장소의 **Releases** 페이지에 `.exe`(Windows)와 `.dmg`(Mac) 파일이 함께 올라옵니다. 별도로 로그인 토큰을 준비할 필요는 없어요 — GitHub Actions가 실행마다 자동으로 발급하는 토큰을 그대로 씁니다.
-
-### Windows에서 처음 실행할 때
-
-설치파일을 실행하면 "Windows가 PC를 보호했습니다"라는 SmartScreen 경고가 뜰 수 있어요(서명 인증서 없이 배포되는 앱이라 나오는 정상적인 경고입니다) — **추가 정보**를 클릭한 뒤 **실행** 버튼을 누르면 정상적으로 설치/실행됩니다.
-
-### Mac에서 처음 실행할 때
-
-이 앱은 애플 개발자 서명 없이 빌드돼서, 다운로드 후 처음 열 때 "손상되었기 때문에 열 수 없습니다"라는 경고가 뜰 수 있어요. 터미널에서 아래 명령을 한 번 실행하면 해결됩니다 (Finder에서 더블클릭이 아니라 설치 위치를 직접 지정해야 하니, 보통 설치되는 경로 그대로 사용하세요):
-
-```bash
-xattr -cr /Applications/FocusPet.app
-```
-
-## 폴더 구조
-
-```
-focus-pet/
-├── main.js                 # Electron 메인 프로세스 (트레이, 타이머, 창 관리)
-├── preload.js              # 렌더러에 안전하게 IPC 노출
-├── settingsStore.js        # 설정 파일 읽기/쓰기 (userData/settings.json)
-├── assets/                 # 트레이/앱 아이콘
-└── windows/
-    ├── pet/                # 펫 오버레이 창 (투명, 항상 위, 클릭 통과 없음)
-    └── settings/           # 설정 창
-```
-
-## 커스터마이징 아이디어
-
-- `windows/pet/pet.js`의 `CHARACTERS` 객체에 이모지를 추가하면 캐릭터 종류를 늘릴 수 있어요.
-- 지금은 이모지 기반이라 별도 이미지 없이 가볍게 동작하는데, 나중에 실제 스프라이트/GIF 캐릭터로 바꾸고 싶으면 `#pet-char`를 `<img>` 태그로 바꾸고 애니메이션 프레임을 교체하면 됩니다.
-- 효과음은 Web Audio API로 생성한 "삐" 소리 하나뿐이라, 원하는 mp3 파일을 넣고 `Audio` 객체로 재생하도록 바꿔도 좋아요.
+[MIT](LICENSE) © YooBi Lee
