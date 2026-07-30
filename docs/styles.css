@@ -1,0 +1,626 @@
+/* FocusPet landing page - reuses the settings window's neutral+coral palette
+   (see windows/settings/settings.css's own :root block) so the site and the
+   app it's advertising read as the same product, not two unrelated designs.
+   Pure CSS, no build step, no external font/icon dependency - loads and
+   renders correctly with zero network access beyond this page's own files. */
+
+:root {
+  --bg: #f6f4f0;
+  --surface: #ffffff;
+  --surface-sunken: #f6f3ee;
+  --border: #ece7de;
+  --border-strong: #ded6c8;
+  --text: #211e1a;
+  --text-secondary: #726b5f;
+  --text-tertiary: #a89f8f;
+  --accent: #e8763a;
+  --accent-strong: #d5652b;
+  --accent-soft: #fdefe2;
+  --accent-border: #f3c9a3;
+  --shadow-card: 0 1px 2px rgba(40, 30, 15, 0.05), 0 1px 1px rgba(40, 30, 15, 0.03);
+  --shadow-lg: 0 18px 40px rgba(40, 30, 15, 0.10), 0 4px 10px rgba(40, 30, 15, 0.06);
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --max-width: 1080px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ---------- top nav ---------- */
+
+.nav {
+  padding: 20px 0;
+}
+
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.brand img {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.nav-links a {
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.nav-links a:hover {
+  color: var(--accent-strong);
+}
+
+.nav-links .btn {
+  margin-left: 4px;
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 22px;
+  border-radius: 999px;
+  font-size: 14.5px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(232, 118, 58, 0.28);
+}
+
+.btn-primary:hover {
+  background: var(--accent-strong);
+  box-shadow: 0 10px 24px rgba(232, 118, 58, 0.34);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-sunken);
+  border-color: var(--text-tertiary);
+}
+
+.btn-sm {
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ---------- hero ---------- */
+
+.hero {
+  padding: 44px 0 76px;
+  /* Faint dot-grid wash, echoing the app's own pixel/voxel look without
+     needing an actual image asset - kept very subtle (low-opacity accent on
+     the page bg) so it reads as texture, not a pattern competing with the
+     content on top of it. */
+  background-image: radial-gradient(var(--accent-border) 1.4px, transparent 1.4px);
+  background-size: 26px 26px;
+  background-position: -4px -4px;
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 56px;
+  align-items: center;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-strong);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin-bottom: 22px;
+}
+
+.hero h1 {
+  font-size: clamp(38px, 6vw, 58px);
+  line-height: 1.05;
+  letter-spacing: -1px;
+  margin: 0 0 16px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.hero h1 .accent-text {
+  color: var(--accent);
+}
+
+.hero-lede {
+  font-size: clamp(16px, 2vw, 19px);
+  color: var(--text-secondary);
+  margin: 0 0 14px;
+  max-width: 46ch;
+}
+
+.hero-sub {
+  font-size: 15px;
+  color: var(--text-tertiary);
+  margin: 0 0 30px;
+  max-width: 50ch;
+}
+
+.hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.hero-fineprint {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.hero-fineprint a {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+}
+
+/* ---------- screenshot placeholder ---------- */
+
+.media-frame {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  aspect-ratio: 4 / 3;
+}
+
+.media-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+  background:
+    repeating-linear-gradient(135deg, var(--surface-sunken) 0 14px, var(--surface) 14px 28px);
+  border: 2px dashed var(--border-strong);
+  margin: 10px;
+  border-radius: calc(var(--radius-lg) - 6px);
+}
+
+.media-placeholder .glyph {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.media-placeholder strong {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+.media-placeholder span {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  max-width: 30ch;
+}
+
+/* To replace with a real screenshot/GIF later: delete the
+   <div class="media-placeholder">...</div> markup inside <div
+   class="media-frame"> in index.html and put
+   <img src="assets/screenshot.png" alt="FocusPet 스크린샷"> (or a <video>/
+   animated <img src="assets/demo.gif">) in its place - .media-frame's own
+   border/shadow/radius already fit a 4:3 screenshot without further
+   changes. */
+
+/* ---------- section shell ---------- */
+
+section {
+  padding: 68px 0;
+}
+
+.section-eyebrow {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin: 0 0 10px;
+}
+
+.section-title {
+  font-size: clamp(26px, 3.4vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin: 0 0 14px;
+  /* Bug found while reviewing screenshots: "작은 창 하나에 생각보다 많은
+     게 들어있어요" wrapped with just "요" orphaned alone on its own line
+     at desktop width - text-wrap:balance (supported in the Chromium
+     version Electron/modern browsers ship) redistributes the line breaks
+     evenly instead of greedily filling each line, which avoids this kind
+     of one-word/one-character leftover line. */
+  text-wrap: balance;
+}
+
+.section-lede {
+  font-size: 16px;
+  color: var(--text-secondary);
+  max-width: 60ch;
+  margin: 0 0 40px;
+}
+
+.section-head {
+  text-align: center;
+  margin: 0 auto 44px;
+  max-width: 640px;
+}
+
+.section-head .section-lede {
+  margin: 0 auto;
+}
+
+/* ---------- features ---------- */
+
+.features {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+/* min-width:0 on grid items - a `1fr` grid track's default min-width is
+   `auto` (the content's own intrinsic minimum width), not 0, so a track
+   won't shrink narrower than whatever its content needs even when the
+   layout clearly needs it to. Usually invisible since most content wraps
+   freely, but bit .download-card specifically below (found by actually
+   loading the page at 375px and checking which elements exceed the
+   viewport - not a theoretical worry): its <code> block uses
+   white-space:pre (so the xattr command stays on one line, meant to
+   scroll internally via its own overflow-x:auto) - without this, that
+   pre-formatted line's width became the grid track's floor, which forced
+   .download-card (and the whole page) wider than the 375px viewport
+   instead of letting the code scroll in place. Added to both card grids
+   defensively (feature-card has no such content today, but the failure
+   mode is silent/easy to reintroduce later if a feature description ever
+   gets a long inline `<code>` too). */
+.feature-card,
+.download-card {
+  min-width: 0;
+}
+
+.feature-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 26px 24px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+  border-color: var(--border-strong);
+}
+
+.feature-icon {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.feature-card h3 {
+  font-size: 16.5px;
+  margin: 0 0 8px;
+  letter-spacing: -0.2px;
+}
+
+.feature-card p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ---------- roster ---------- */
+
+.roster-group {
+  margin-bottom: 26px;
+}
+
+.roster-group:last-child {
+  margin-bottom: 0;
+}
+
+.roster-group-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin: 0 0 14px;
+}
+
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.roster-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+
+.roster-chip .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+/* ---------- download ---------- */
+
+.download {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.download-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.download-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 28px 26px;
+}
+
+.download-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.download-card-head .glyph {
+  font-size: 26px;
+}
+
+.download-card-head h3 {
+  font-size: 17px;
+  margin: 0;
+}
+
+.download-note {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  margin: 16px 0 0;
+  line-height: 1.65;
+}
+
+.download-note code {
+  display: block;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Cascadia Code', 'Consolas', 'SFMono-Regular', Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ---------- footer ---------- */
+
+footer {
+  padding: 40px 0 48px;
+}
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.footer-links {
+  display: flex;
+  gap: 18px;
+}
+
+.footer-links a {
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.footer-links a:hover {
+  color: var(--accent-strong);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 860px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .media-frame {
+    order: -1;
+    aspect-ratio: 16 / 10;
+  }
+
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .download-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding: 0 18px;
+  }
+
+  .nav-links {
+    gap: 12px;
+  }
+
+  /* Bug found by actually loading the page at 375px width and checking
+     document.documentElement.scrollWidth (see docs' own build-check note -
+     this genuinely broke, wasn't just theorized): with 4 Korean nav links
+     (기능/캐릭터/다운로드/GitHub) all trying to fit alongside the button in
+     one row and no flex-wrap, each link's text got squeezed into a column
+     too narrow for even one character-width of the word and wrapped
+     letter-by-letter, stacking vertically - the resulting tall/narrow
+     columns forced the whole nav (and thus the page) wider than the
+     viewport. Simplest real fix: drop the secondary text links on narrow
+     screens entirely (a single-page site's anchor links aren't essential
+     when you can just scroll), keep only the brand + the primary
+     "다운로드" CTA button - both fit comfortably at 375px with no wrapping. */
+  .nav-links a:not(.btn) {
+    display: none;
+  }
+
+  .nav-links span.divider {
+    display: none;
+  }
+
+  .hero {
+    padding: 32px 0 52px;
+  }
+
+  section {
+    padding: 52px 0;
+  }
+
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-ctas .btn,
+  .download-card .btn {
+    width: 100%;
+  }
+
+  .footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

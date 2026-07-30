@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FocusPet — 화면 위에서 집중하라고 알려주는 데스크탑 펫</title>
+  <meta name="description" content="작업하거나 공부할 때 화면 한쪽에 앉아있다가, 정해둔 방식으로 집중하라고 알려주는 Windows/Mac 데스크탑 펫. 10종 캐릭터, 실시간 3D 렌더링, 커서 반응형 상호작용." />
+  <link rel="icon" href="assets/app-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 두 다운로드 버튼(히어로 + 하단 다운로드 섹션)이 전부 GitHub Releases의
+       "최신 릴리즈" 페이지로 연결됨 - 개별 .exe/.dmg 파일 URL을 직접 박아두지
+       않는 이유: 새 버전이 릴리즈될 때마다 이 페이지를 같이 고칠 필요 없이
+       releases/latest가 항상 최신으로 자동 리다이렉트되게 하기 위함(GitHub이
+       자체적으로 제공하는 기능). -->
+
+  <header class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="#top">
+        <img src="assets/app-icon.png" alt="" width="30" height="30" />
+        FocusPet
+      </a>
+      <nav class="nav-links">
+        <a href="#features">기능</a>
+        <a href="#roster">캐릭터</a>
+        <a href="#download">다운로드</a>
+        <span class="divider">·</span>
+        <a href="https://github.com/yoobilee/focus-pet" target="_blank" rel="noopener">GitHub</a>
+        <a class="btn btn-primary btn-sm" href="https://github.com/yoobilee/focus-pet/releases/latest" target="_blank" rel="noopener">다운로드</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <span class="eyebrow">🐾 무료 · 오픈소스 데스크탑 앱</span>
+          <h1>화면 구석에서<br />조용히 <span class="accent-text">집중하라고</span><br />알려주는 펫</h1>
+          <p class="hero-lede">작업하거나 공부할 때 화면 한쪽에 앉아있다가, 정해둔 방식으로 "집중하세요"라고 알려주는 데스크탑 펫이에요.</p>
+          <p class="hero-sub">다른 프로그램을 아무리 켜놔도 — 전체화면 강의 영상 위에도 — 항상 떠 있어요. 커서를 졸졸 따라 쳐다보고, 손으로 집어서 원하는 자리에 옮겨둘 수도 있어요.</p>
+          <div class="hero-ctas">
+            <a class="btn btn-primary" href="https://github.com/yoobilee/focus-pet/releases/latest" target="_blank" rel="noopener">
+              <span>⊞</span> Windows 다운로드
+            </a>
+            <a class="btn btn-secondary" href="https://github.com/yoobilee/focus-pet/releases/latest" target="_blank" rel="noopener">
+              <span>🍎</span> Mac 다운로드
+            </a>
+          </div>
+          <p class="hero-fineprint">GitHub Releases에서 최신 버전(.exe / .dmg)을 무료로 받을 수 있어요 · <a href="https://github.com/yoobilee/focus-pet/releases" target="_blank" rel="noopener">이전 버전 보기</a></p>
+        </div>
+
+        <div class="media-frame">
+          <!-- 실제 스크린샷/GIF로 교체하려면: 아래 .media-placeholder 블록을
+               지우고 그 자리에
+               <img src="assets/screenshot.png" alt="FocusPet 스크린샷">
+               (또는 <img src="assets/demo.gif" alt="FocusPet 데모">)를 넣으면
+               됨 - .media-frame의 둥근 테두리/그림자는 그대로 유지됨. -->
+          <div class="media-placeholder">
+            <span class="glyph">🖼️</span>
+            <strong>스크린샷 / GIF 자리</strong>
+            <span>실제 캡처 이미지를 assets/screenshot.png(또는 .gif)로 넣고 이 자리를 &lt;img&gt; 태그로 교체하세요</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <div class="container">
+        <div class="section-head">
+          <p class="section-eyebrow">기능</p>
+          <h2 class="section-title">작은 창 하나에 생각보다 많은 게 들어있어요</h2>
+          <p class="section-lede">CLAUDE.md에 정리된 그대로 — 픽셀아트가 아니라 진짜 3D로 렌더링되는 캐릭터부터, 화면 어디에 있든 사용자를 알아채는 반응형 상호작용까지.</p>
+        </div>
+
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🐾</div>
+            <h3>10종 캐릭터</h3>
+            <p>고양이 4종(태비 · 턱시도 · 삼색이 · 샴), 강아지 4종(닥스훈트 · 코기 · 허스키 · 포메라니안), 토끼, 햄스터 중 골라서 데스크탑에 앉혀둘 수 있어요.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🧊</div>
+            <h3>진짜 3D 렌더링</h3>
+            <p>각진 복셀(voxel) 스타일로 압출된 3D 모델이 실시간으로 회전하고, 그루밍 · 앉기 · 낮잠 같은 종별 행동을 재생해요. 정지 이미지가 아니에요.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">👀</div>
+            <h3>커서를 졸졸 따라다녀요</h3>
+            <p>화면 어디에 마우스가 있든 고개를 돌려 쳐다보고, 가까이 다가가면 귀를 쫑긋 세우는 등 종마다 다른 방식으로 반응해요.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">⏱️</div>
+            <h3>알림 방식은 취향대로</h3>
+            <p>정해진 시간마다 알려주는 <b>고정 간격</b>, 키보드 · 마우스 입력이 끊기면 알려주는 <b>활동 감지</b> 중 상황에 맞는 쪽을 골라 설정할 수 있어요.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🖥️</div>
+            <h3>언제나 맨 위에</h3>
+            <p>전체화면으로 강의 영상을 틀어놔도, 다른 어떤 프로그램을 켜놔도 항상 화면 위에 떠 있어서 절대 안 가려져요.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">✋</div>
+            <h3>손으로 집어 옮기기</h3>
+            <p>드래그로 원하는 자리에 옮길 수 있고, 화면 가장자리 가까이 놓으면 자석처럼 딱 붙어요. 놓으면 작업표시줄 위로 사뿐히 내려앉아요.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="roster">
+      <div class="container">
+        <div class="section-head">
+          <p class="section-eyebrow">캐릭터 로스터</p>
+          <h2 class="section-title">10종 중 마음에 드는 아이로</h2>
+          <p class="section-lede">설정 창에서 언제든 바꿀 수 있어요. 각 캐릭터는 실제 품종 특징(코기의 짧은 다리와 없는 꼬리, 허스키의 파란 눈 등)을 반영해서 디자인했어요.</p>
+        </div>
+
+        <div class="roster-group">
+          <p class="roster-group-label">고양이</p>
+          <div class="roster-chips">
+            <span class="roster-chip"><span class="dot" style="background:#e8935a"></span>태비 고양이</span>
+            <span class="roster-chip"><span class="dot" style="background:#161616"></span>턱시도</span>
+            <span class="roster-chip"><span class="dot" style="background:#faf3e6;border:1px solid #ded6c8"></span>삼색이</span>
+            <span class="roster-chip"><span class="dot" style="background:#5c4636"></span>샴</span>
+          </div>
+        </div>
+
+        <div class="roster-group">
+          <p class="roster-group-label">강아지</p>
+          <div class="roster-chips">
+            <span class="roster-chip"><span class="dot" style="background:#a8562e"></span>닥스훈트</span>
+            <span class="roster-chip"><span class="dot" style="background:#d9a15c"></span>코기</span>
+            <span class="roster-chip"><span class="dot" style="background:#5c6670"></span>허스키</span>
+            <span class="roster-chip"><span class="dot" style="background:#e8c896"></span>포메라니안</span>
+          </div>
+        </div>
+
+        <div class="roster-group">
+          <p class="roster-group-label">기타</p>
+          <div class="roster-chips">
+            <span class="roster-chip"><span class="dot" style="background:#f5efe4;border:1px solid #ded6c8"></span>토끼</span>
+            <span class="roster-chip"><span class="dot" style="background:#e3ab5f"></span>햄스터</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="download" class="download">
+      <div class="container">
+        <div class="section-head">
+          <p class="section-eyebrow">다운로드</p>
+          <h2 class="section-title">지금 바로 시작하기</h2>
+          <p class="section-lede">GitHub Releases에서 무료로 받을 수 있어요. 별도 가입이나 결제 없이, 원하는 OS의 설치 파일을 받아 실행하면 끝이에요.</p>
+        </div>
+
+        <div class="download-grid">
+          <div class="download-card">
+            <div class="download-card-head">
+              <span class="glyph">⊞</span>
+              <h3>Windows</h3>
+            </div>
+            <a class="btn btn-primary btn-block" href="https://github.com/yoobilee/focus-pet/releases/latest" target="_blank" rel="noopener">Windows 다운로드 (.exe)</a>
+            <p class="download-note">설치 파일을 실행하면 "Windows가 PC를 보호했습니다"라는 SmartScreen 경고가 뜰 수 있어요 — 서명 인증서 없이 배포되는 앱이라 나오는 정상적인 경고예요. <b>추가 정보</b>를 클릭한 뒤 <b>실행</b> 버튼을 누르면 정상적으로 설치돼요.</p>
+          </div>
+
+          <div class="download-card">
+            <div class="download-card-head">
+              <span class="glyph">🍎</span>
+              <h3>Mac</h3>
+            </div>
+            <a class="btn btn-primary btn-block" href="https://github.com/yoobilee/focus-pet/releases/latest" target="_blank" rel="noopener">Mac 다운로드 (.dmg)</a>
+            <p class="download-note">애플 개발자 서명 없이 빌드돼서, 다운로드 후 처음 열 때 "손상되었기 때문에 열 수 없습니다"라는 경고가 뜰 수 있어요. 터미널에서 아래 명령을 한 번 실행하면 해결돼요:
+              <code>xattr -cr /Applications/FocusPet.app</code>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <span>© 2026 FocusPet · MIT License</span>
+        <div class="footer-links">
+          <a href="https://github.com/yoobilee/focus-pet" target="_blank" rel="noopener">GitHub 저장소</a>
+          <a href="https://github.com/yoobilee/focus-pet/releases" target="_blank" rel="noopener">릴리즈 노트</a>
+          <a href="https://github.com/yoobilee/focus-pet/issues" target="_blank" rel="noopener">버그 제보</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
