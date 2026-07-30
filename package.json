@@ -5,6 +5,10 @@
   "main": "main.js",
   "author": "YooBi Lee",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yoobilee/focus-pet.git"
+  },
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
@@ -27,11 +31,17 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/app-icon.png"
+      "icon": "assets/app-icon.png",
+      "artifactName": "${productName}-${version}-Setup.${ext}"
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/app-icon.png"
+      "icon": "assets/app-icon.png",
+      "artifactName": "${productName}-${version}.${ext}",
+      "identity": null
+    },
+    "publish": {
+      "provider": "github"
     }
   },
   "dependencies": {

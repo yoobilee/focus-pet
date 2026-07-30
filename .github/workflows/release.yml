@@ -1,0 +1,75 @@
+name: Release
+
+# Triggered by pushing a version tag (e.g. `v1.0.0`, `v1.2.3`) - not on every
+# push to main, so ordinary commits never kick off a build/publish. To ship
+# a new release: bump "version" in package.json, commit, then
+# `git tag vX.Y.Z && git push origin vX.Y.Z` (see README.md's own
+# "새 버전 배포하기" section for the exact steps).
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# electron-builder's GitHub publish step needs write access to create the
+# Release and upload assets to it - GITHUB_TOKEN's default permission level
+# depends on the repo/org's own settings (newer repos default to read-only),
+# so this is set explicitly rather than relying on whatever the repo happens
+# to have configured.
+permissions:
+  contents: write
+
+jobs:
+  # Windows and macOS build in two independent jobs with no `needs:` between
+  # them, so GitHub Actions runs them in parallel rather than one waiting on
+  # the other. Both publish (`--publish always`) to the SAME tag's GitHub
+  # Release - electron-builder's GitHub provider checks for (and reuses) an
+  # existing release for the tag rather than only ever trying to create a
+  # new one, so whichever job's upload lands first creates the release and
+  # the other just attaches its own artifact to it. This is the standard,
+  # widely-used electron-builder multi-OS release pattern, not something
+  # specific to this project.
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # electron-builder reads GH_TOKEN (not GITHUB_TOKEN - different env
+      # var name) for its own GitHub publish step; secrets.GITHUB_TOKEN is
+      # the token GitHub Actions provisions automatically for every run, no
+      # extra repo secret needs to be created for this to work.
+      - name: Build and publish (Windows)
+        run: npm run build -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # No Apple Developer certificate in this repo, so code signing has to
+      # be explicitly turned off rather than left to electron-builder's
+      # default behavior of trying to auto-discover one from the runner's
+      # keychain (which would fail the build on a cert-less CI runner).
+      # package.json's build.mac.identity is already set to null for the
+      # same reason - CSC_IDENTITY_AUTO_DISCOVERY=false here is belt-and-
+      # suspenders on top of that, not a substitute for it.
+      - name: Build and publish (macOS)
+        run: npm run build -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
