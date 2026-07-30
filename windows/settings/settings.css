@@ -125,6 +125,19 @@ main::-webkit-scrollbar-thumb:hover {
   margin: -6px 0 10px;
 }
 
+/* ---------- quick controls (settings-window mirror of the tray menu) ---------- */
+
+.quick-controls-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quick-test-btn {
+  margin-top: 12px;
+  width: 100%;
+}
+
 /* ---------- character grid ---------- */
 
 .char-grid {
@@ -406,11 +419,35 @@ input[type="range"]:focus-visible {
 footer {
   flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
   gap: 8px;
-  padding: 14px 20px 18px;
+  padding: 12px 20px 18px;
   border-top: 1px solid var(--border);
   background: var(--surface);
+}
+
+.footer-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  /* space-between - "전체 설정 초기화" sits on the far left as a
+     low-emphasis link-style button (see button.danger-link below),
+     deliberately separated from the primary 기본값으로/저장 pair on the
+     right so it doesn't read as a third equally-weighted action in the
+     same button group - it's a destructive, rarely-used escape hatch, not
+     part of the everyday save flow. */
+  justify-content: space-between;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
 }
 
 button {
@@ -446,4 +483,22 @@ button.secondary {
 button.secondary:hover {
   background: var(--surface-sunken);
   color: var(--text);
+}
+
+/* "전체 설정 초기화" - deliberately understated (no border/background of
+   its own) so it doesn't visually compete with the primary save action,
+   with a warning color only on hover as the one hint that it's
+   destructive/irreversible - the actual confirmation is a native confirm()
+   dialog in settings.js, this is just the button's own resting/hover
+   styling. */
+button.danger-link {
+  background: none;
+  border-color: transparent;
+  color: var(--text-tertiary);
+  padding: 9px 6px;
+}
+
+button.danger-link:hover {
+  color: #c0392b;
+  background: none;
 }

@@ -40,6 +40,16 @@ const DEFAULTS = {
   // state machine).
   movementMode: 'stationary', // stationary | pacing
   paused: false,
+  // Windows 시작 시 자동 실행 - applied to the actual OS startup-apps list
+  // via app.setLoginItemSettings (see main.js's applyLoginItemSettings),
+  // not just stored inertly like most other fields here.
+  launchAtStartup: false,
+  // "오늘 하루 알림 끄기" - a local date string ('YYYY-MM-DD') for the day
+  // it was turned on, or null. Separate from `paused` (which has no
+  // built-in expiry) - see main.js's isOffForToday/clearStaleOffForToday
+  // for how this self-expires the next day without needing a persisted
+  // "until" timestamp.
+  offForTodayDate: null,
   messages: [
     '저기요, 저 아직 살아있어요... 집중 좀 해주실래요? 🐾',
     '화면 반, 딴생각 반... 비율 조정이 필요해 보이는데요? 👀',

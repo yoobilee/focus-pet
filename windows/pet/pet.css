@@ -38,6 +38,18 @@ html, body {
   will-change: transform;
 }
 
+/* "펫 숨기기" (quick-controls pause/hide, see main.js's setPetVisible) -
+   toggled by pet.js in response to the 'pet-hidden-state' IPC push. The
+   window itself stays OS-visible (reminders must keep showing - see
+   #bubble below, which lives outside #pet-wrap and is never affected by
+   this), only the sprite disappears. display:none also collapses
+   #pet-wrap's own getBoundingClientRect() to a zero rect, which
+   pet.js's sampleHit() already treats as an automatic click-through miss -
+   no separate hit-test bypass needed here. */
+#pet-wrap.pet-hidden {
+  display: none;
+}
+
 #pet-canvas {
   width: 96px;
   height: 96px;
@@ -59,16 +71,24 @@ html, body {
    own (generous) bounds so it can shift away from a nearby screen edge
    without ever needing to leave the window itself; `bottom` is a fixed
    anchor since the sprite's own vertical position never moves (always
-   ground-anchored via #pet-wrap's own bottom:3px above). 101px =
-   SPRITE_BOTTOM_INSET(3) + sprite height(96) + a 2px gap above the
-   sprite's head - keep in sync with main.js's SPRITE_BOTTOM_INSET and
-   this file's own #pet-wrap height if either ever changes. */
+   ground-anchored via #pet-wrap's own bottom:3px above). 101px (the
+   default --bubble-bottom) = SPRITE_BOTTOM_INSET(3) + sprite height(96) +
+   a 2px gap above the sprite's head - keep in sync with main.js's
+   SPRITE_BOTTOM_INSET and this file's own #pet-wrap height if either ever
+   changes. --bubble-bottom is overridden by pet.js (see its
+   onPetHiddenState handler/HIDDEN_BUBBLE_BOTTOM) to a much smaller value
+   while the pet is hidden - that 101px reserves room above a VISIBLE
+   sprite's head, which is just empty dead space (reading as "floating far
+   above the taskbar") once there's no sprite drawn to reserve it for. */
 #bubble {
   position: absolute;
   left: 0;
-  bottom: 101px;
+  bottom: var(--bubble-bottom, 101px);
   max-width: 190px;
   width: max-content;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   background: #ffffff;
   color: #3a3a3a;
   padding: 10px 14px;
@@ -80,7 +100,42 @@ html, body {
   opacity: 0;
   transform: scale(0.9);
   transition: opacity 0.25s ease, transform 0.25s ease;
-  pointer-events: none; /* purely decorative - click-through is entirely alpha-sampled off #pet-canvas, this never needs to intercept anything */
+  /* The bubble box itself stays click-through (still purely decorative at
+     the box level) - click-through is entirely alpha/rect-sampled off
+     #pet-canvas + #bubble-snooze (see pet.js's processPendingMouse), never
+     relies on this pointer-events value to intercept anything itself. The
+     snooze button below opts back into real hit-testing with its own
+     pointer-events:auto override. */
+  pointer-events: none;
+}
+
+/* "10분 뒤 다시" snooze button (see main.js's 'snooze-reminder' IPC) -
+   display is ALWAYS set explicitly by pet.js's showBubble(...,
+   showSnooze) on every call (both the true and false branches), never
+   left to fall back on this default, so this value only matters before
+   the very first showBubble() call ever runs. pointer-events:auto
+   overrides the parent #bubble's pointer-events:none; pet.js's
+   isOverSnoozeButton() extends the existing alpha-sampled click-through
+   hit test with an explicit getBoundingClientRect() check against this
+   element so OS-level click-through actually lets real clicks through to
+   it. */
+#bubble-snooze {
+  display: none;
+  pointer-events: auto;
+  margin-top: 7px;
+  padding: 4px 11px;
+  border: none;
+  border-radius: 999px;
+  background: #efece5;
+  color: #726b5f;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+#bubble-snooze:hover {
+  background: #e4dfd4;
 }
 
 #bubble::after {

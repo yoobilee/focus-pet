@@ -9,6 +9,7 @@ const petWrapEl = document.getElementById('pet-wrap');
 const canvas = document.getElementById('pet-canvas');
 const bubbleEl = document.getElementById('bubble');
 const bubbleTextEl = document.getElementById('bubble-text');
+const bubbleSnoozeBtn = document.getElementById('bubble-snooze');
 
 // 3D voxel renderer (feature/3d-space branch - replaces the earlier Canvas
 // 2D drawCreature() rendering entirely; see CLAUDE.md's "실제 pet 창에
@@ -73,6 +74,44 @@ window.focusPetAPI.onSpriteLocalX((localX) => {
 let paused = false; // true only while a reminder bubble is showing
 let asleep = false;
 let lastTs = null;
+
+// "펫 숨기기" (quick-controls pause/hide - see main.js's setPetVisible) -
+// the WINDOW stays open the whole time (reminders must keep firing/showing
+// as a bubble-only, per the request), only the sprite itself disappears.
+// #pet-wrap.pet-hidden (pet.css) collapses the sprite's own
+// getBoundingClientRect() to a zero rect, which sampleHit()'s existing
+// zero-rect guard already treats as an automatic click-through miss - no
+// separate hit-test bypass needed for the sprite itself. tick()/render()
+// below skip all pose/gait/rotation work while hidden (nothing to animate
+// for an invisible sprite), but deliberately keep running the bubble
+// positioning/click-through-for-the-snooze-button logic unconditionally.
+let petHidden = false;
+window.focusPetAPI.onPetHiddenState(({ hidden }) => {
+  petHidden = hidden;
+  petWrapEl.classList.toggle('pet-hidden', hidden);
+  // See HIDDEN_BUBBLE_BOTTOM's own comment (further below - this is above
+  // its declaration purely because bubbleEl/the API subscription both live
+  // up here already, hoisting makes the const's own textual position
+  // irrelevant to this reference working correctly) - swaps pet.css's
+  // #bubble{bottom} over to a taskbar-hugging value while hidden, and back
+  // to the default (sprite-head-relative) one once shown again.
+  if (hidden) {
+    bubbleEl.style.setProperty('--bubble-bottom', `${HIDDEN_BUBBLE_BOTTOM}px`);
+  } else {
+    bubbleEl.style.removeProperty('--bubble-bottom');
+  }
+  // main.js holds the whole window at opacity 0 across this transition and
+  // only restores it once this ack arrives (see its own
+  // armPetHiddenOpacityRestore) - double rAF (not just one) waits for an
+  // actual PAINT reflecting the class/property changes just above to have
+  // happened, not merely for this callback to have run, before telling
+  // main.js it's safe to make the window visible again. See main.js's own
+  // comment on why a single ordered IPC send couldn't guarantee this on
+  // its own.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => window.focusPetAPI.notifyHiddenApplied());
+  });
+});
 
 // ---------------------------------------------------------------------
 // Pacing ("좌우 이동" movement mode) - the pet walks the taskbar edge to
@@ -285,6 +324,19 @@ let bubbleFadeOutTimer = null;
 // wide the clamp below will rarely actually engage in practice.
 const BUBBLE_SAFE_MARGIN = 16;
 
+// Bug fix ("펫 숨김 상태일 때 말풍선이 작업표시줄에서 너무 멀리 떠 있음"):
+// pet.css's default #bubble{bottom} (101px) reserves room ABOVE a visible
+// 96px-tall sprite, so the bubble sits well clear of its head - correct
+// while the sprite is drawn, but with #pet-wrap hidden that whole 96px is
+// just empty dead space between the bubble and the taskbar, reading as
+// "floating far above" it even though the pixel offset from the window's
+// own (taskbar-anchored) bottom edge hasn't changed. While petHidden, the
+// bubble should hug the taskbar the way the sprite's own feet normally do
+// (pet.css's #pet-wrap{bottom:3px}) instead of leaving room for a sprite
+// that isn't there - see onPetHiddenState below, which swaps pet.css's
+// --bubble-bottom custom property to this value only while hidden.
+const HIDDEN_BUBBLE_BOTTOM = 16;
+
 // Positions #bubble horizontally so it's centered on the sprite by default,
 // but clamped to stay within the window's own bounds (minus
 // BUBBLE_SAFE_MARGIN) if that would run it past the window's edge -
@@ -310,22 +362,52 @@ function positionBubble() {
   bubbleEl.style.setProperty('--tail-x', `${Math.max(20, Math.min(bubbleWidth - 20, tailX))}px`);
 }
 
-function showBubble(message, durationMs = 6000) {
+// Only set while a bubble showing showSnooze=true is up - the message the
+// snooze button should re-fire 10 minutes later (see main.js's
+// 'snooze-reminder'). null for poke reactions (no snooze button shown at
+// all) and once any bubble has been dismissed either way.
+let currentReminderMessage = null;
+
+function fadeOutBubble() {
+  paused = false;
+  bubbleEl.classList.remove('show');
+  bubbleFadeOutTimer = setTimeout(() => {
+    bubbleVisible = false; // stop the per-frame positionBubble() calls once fully faded out
+  }, 250); // matches pet.css's own 0.25s opacity/transform transition
+}
+
+// showSnooze: only actual reminders (main.js's onReminder below) get the
+// "10분 뒤 다시" button - poke reactions (a quick 1.4s "왜 불러요?"-style
+// aside, not something worth snoozing) never do. Always sets
+// bubbleSnoozeBtn.style.display explicitly on every call (both branches),
+// rather than relying on any HTML/CSS default, so there's no ambiguity
+// about whether a leftover snooze button from a previous reminder could
+// still be showing during a later poke reaction.
+function showBubble(message, durationMs = 6000, showSnooze = false) {
   bubbleTextEl.textContent = message;
+  currentReminderMessage = showSnooze ? message : null;
+  bubbleSnoozeBtn.style.display = showSnooze ? '' : 'none';
   bubbleVisible = true;
   positionBubble(); // position BEFORE the fade-in starts, using the just-updated text's real laid-out width
   requestAnimationFrame(() => bubbleEl.classList.add('show'));
   paused = true;
   if (bubbleHideTimer) clearTimeout(bubbleHideTimer);
   if (bubbleFadeOutTimer) clearTimeout(bubbleFadeOutTimer);
-  bubbleHideTimer = setTimeout(() => {
-    paused = false;
-    bubbleEl.classList.remove('show');
-    bubbleFadeOutTimer = setTimeout(() => {
-      bubbleVisible = false; // stop the per-frame positionBubble() calls once fully faded out
-    }, 250); // matches pet.css's own 0.25s opacity/transform transition
-  }, durationMs);
+  bubbleHideTimer = setTimeout(fadeOutBubble, durationMs);
 }
+
+// Dismisses the current bubble immediately (same fade-out as a normal
+// timeout) and asks main.js to re-fire this exact message 10 minutes from
+// now - see main.js's 'snooze-reminder' handler for the actual re-fire
+// (shared with the regular timer path's paused/오늘-하루-끄기 gating, so a
+// snoozed reminder can't bypass either).
+bubbleSnoozeBtn.addEventListener('click', () => {
+  if (bubbleHideTimer) { clearTimeout(bubbleHideTimer); bubbleHideTimer = null; }
+  if (bubbleFadeOutTimer) clearTimeout(bubbleFadeOutTimer);
+  const message = currentReminderMessage;
+  fadeOutBubble();
+  if (message) window.focusPetAPI.snoozeReminder(message);
+});
 
 // ---------------------------------------------------------------------
 // Click-through hit-testing. main.js defaults the whole window to
@@ -522,13 +604,28 @@ function sampleHit(clientX, clientY) {
   }
 }
 
+// #bubble itself stays pointer-events:none (purely decorative box - see
+// pet.css), but #bubble-snooze opts back into pointer-events:auto so it's
+// actually clickable - that CSS override alone isn't enough on its own,
+// though: OS-level click-through (setIgnoreMouseEvents) is driven entirely
+// by this file's own alpha-sampled hit test, which only ever looks at
+// #pet-canvas and has no idea the button exists. This extends that same
+// hit test with an explicit rect check against the button, so real mouse
+// events actually get forwarded to it while the cursor is over it.
+function isOverSnoozeButton(clientX, clientY) {
+  if (bubbleSnoozeBtn.style.display === 'none') return false;
+  const rect = bubbleSnoozeBtn.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  return pointInRect(clientX, clientY, rect);
+}
+
 function processPendingMouse() {
   // Skip re-sampling entirely while dragging (see the drag block below) -
   // hitState/ignore are pinned to "hit" for the whole drag regardless of
   // what the alpha test would say from frame to frame.
   if (dragging) return;
   if (!pendingMouse) return;
-  const hit = sampleHit(pendingMouse.x, pendingMouse.y);
+  const hit = sampleHit(pendingMouse.x, pendingMouse.y) || isOverSnoozeButton(pendingMouse.x, pendingMouse.y);
   pendingMouse = null;
   if (hit === hitState) return;
   hitState = hit;
@@ -707,7 +804,10 @@ let bodyRotationTargetY = 0;
 
 function render(dt) {
   petWrapEl.style.transform = `translateX(${x}px)`;
-  if (!animal || !group) return;
+  // petHidden: #pet-wrap is display:none anyway (pet.css), so skip the
+  // actual WebGL render/pose work too - nothing to show for it, and it'd
+  // just be wasted GPU work every frame while hidden.
+  if (!animal || !group || petHidden) return;
   const pose = animal.getPose();
   if (pose.spinOverride) {
     // Round 8 issue 1 - Z-axis idles (prowlcircle/chasetail/hopspin) drive
@@ -772,7 +872,13 @@ function tick(ts) {
   const dt = Math.min((ts - lastTs) / 1000, 0.05);
   lastTs = ts;
 
-  if (animal) {
+  // petHidden: freeze all gait/pose/rotation/pacing work while the sprite
+  // itself isn't being drawn (see render()'s own petHidden check) - the
+  // bubble (positioned below, unconditionally) is the only thing that still
+  // needs to update every frame while hidden, per "펫을 숨긴 상태에서도
+  // 알림 트리거는 계속 정상 작동". Resumes exactly where it left off once
+  // un-hidden (nothing here is time-based/accumulating while skipped).
+  if (animal && !petHidden) {
     updateCursorHint();
     const allowedToMove = !paused;
     // Decide whether to start/continue/rest a pacing leg BEFORE
@@ -867,7 +973,9 @@ window.focusPetAPI.onPreviewCharacter((key) => {
 });
 
 window.focusPetAPI.onReminder(({ message, soundEnabled, soundVolume }) => {
-  showBubble(message);
+  // showSnooze:true - only real reminders get the "10분 뒤 다시" button
+  // (poke reactions above never pass it, so default to false there).
+  showBubble(message, 6000, true);
   if (soundEnabled) playBeep(soundVolume);
 });
 

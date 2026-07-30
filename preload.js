@@ -34,5 +34,33 @@ contextBridge.exposeInMainWorld('focusPetAPI', {
   // main.js's 'preview-character' handler and settings.js's char-grid
   // click handler.
   previewCharacter: (key) => ipcRenderer.send('preview-character', key),
-  onPreviewCharacter: (callback) => ipcRenderer.on('preview-character', (_event, key) => callback(key))
+  onPreviewCharacter: (callback) => ipcRenderer.on('preview-character', (_event, key) => callback(key)),
+  // Pushed whenever main.js flips "펫 숨기기" (see its own setPetVisible) -
+  // pet.js stops drawing the sprite (and, by construction, its own
+  // click-through hit-test naturally goes fully pass-through) while
+  // hidden:true, but keeps showing reminder bubbles as normal.
+  onPetHiddenState: (callback) => ipcRenderer.on('pet-hidden-state', (_event, data) => callback(data)),
+  // Fired back to main.js once pet.js has actually applied a
+  // 'pet-hidden-state' push and had a real paint reflect it (see pet.js's
+  // own double-requestAnimationFrame) - main.js holds the window at
+  // opacity 0 for the whole reposition+IPC handshake and only restores it
+  // to 1 once this ack lands, so the position jump itself is never visible
+  // (see main.js's armPetHiddenOpacityRestore).
+  notifyHiddenApplied: () => ipcRenderer.send('pet-hidden-applied'),
+  // "10분 뒤 다시" snooze button (pet.js's own bubble markup) - fire-and-
+  // forget, see main.js's 'snooze-reminder' handler.
+  snoozeReminder: (message) => ipcRenderer.send('snooze-reminder', message),
+  // Quick controls ("트레이 메뉴 전용 기능들을 설정 페이지에서도") - the
+  // settings window's own equivalents of the tray menu's pause/resume,
+  // show/hide, and "test now" actions, plus "오늘 하루 알림 끄기" (tray-
+  // menu-only features don't need a tray equivalent, just the reverse).
+  // getStatus/onStatusUpdated are how the settings window's toggles stay in
+  // sync with whatever the tray (or the settings window itself) last did -
+  // see main.js's getStatus/broadcastStatus.
+  getStatus: () => ipcRenderer.invoke('get-status'),
+  onStatusUpdated: (callback) => ipcRenderer.on('status-updated', (_event, status) => callback(status)),
+  togglePaused: () => ipcRenderer.send('toggle-paused'),
+  togglePetVisible: () => ipcRenderer.send('toggle-pet-visible'),
+  toggleOffToday: () => ipcRenderer.send('toggle-off-today'),
+  fireReminderNow: () => ipcRenderer.send('fire-reminder-now')
 });

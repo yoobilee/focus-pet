@@ -249,15 +249,13 @@ function pickMessage() {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+// The regular timer-driven reminder just picks a random message and sends
+// it - see sendReminderMessage (further below, in the quick-controls
+// section) for the actual paused/오늘-하루-끄기 gating and IPC send, shared
+// with the 10-minute snooze timeout so a snoozed reminder can't bypass
+// either check.
 function fireReminder() {
-  if (settings.paused) return;
-  if (petWindow) {
-    petWindow.webContents.send('reminder', {
-      message: pickMessage(),
-      soundEnabled: settings.soundEnabled,
-      soundVolume: settings.soundVolume
-    });
-  }
+  sendReminderMessage(pickMessage());
 }
 
 function clearTimers() {
@@ -345,6 +343,11 @@ function startAlwaysOnTopPoll() {
   if (alwaysOnTopPollTimer) return;
   alwaysOnTopPollTimer = setInterval(() => {
     if (petWindow && !petWindow.isDestroyed()) petWindow.setAlwaysOnTop(true, 'screen-saver');
+    // Piggybacked here rather than its own timer - see
+    // clearStaleOffForToday's own comment for why this is an opportunistic
+    // poll instead of a scheduled midnight timeout, and why "this
+    // already-always-running 3s poll" is as good a place as any to check.
+    clearStaleOffForToday();
   }, 3000);
 }
 
@@ -355,23 +358,22 @@ function buildTray() {
   refreshTrayMenu();
 }
 
+// Both click handlers below delegate to setPaused/setPetVisible (defined in
+// the quick-controls section further down) rather than mutating state
+// inline - those are the SAME functions the settings window's own toggles
+// call (see main.js's ipcMain handlers for 'toggle-paused'/
+// 'toggle-pet-visible'), so tray clicks and settings-window toggles always
+// go through one shared path that keeps both surfaces in sync (see
+// broadcastStatus).
 function refreshTrayMenu() {
   const menu = Menu.buildFromTemplate([
     {
       label: settings.paused ? '알림 재개' : '알림 일시정지',
-      click: () => {
-        settings.paused = !settings.paused;
-        store.save(settings);
-        refreshTrayMenu();
-      }
+      click: () => setPaused(!settings.paused)
     },
     {
-      label: petWindow && petWindow.isVisible() ? '펫 숨기기' : '펫 보이기',
-      click: () => {
-        if (!petWindow) return;
-        if (petWindow.isVisible()) petWindow.hide(); else petWindow.show();
-        refreshTrayMenu();
-      }
+      label: petVisible ? '펫 숨기기' : '펫 보이기',
+      click: () => setPetVisible(!petVisible)
     },
     { type: 'separator' },
     { label: '설정 열기', click: () => createSettingsWindow() },
@@ -386,6 +388,7 @@ app.whenReady().then(() => {
   createPetWindow();
   buildTray();
   applyTimers();
+  applyLoginItemSettings();
   startAwayPoll();
   startCursorTrackPoll();
   startAlwaysOnTopPoll();
@@ -408,7 +411,9 @@ ipcMain.handle('save-settings', (event, newSettings) => {
   settings = { ...settings, ...newSettings };
   store.save(settings);
   applyTimers();
+  applyLoginItemSettings(); // idempotent - cheap to call on every save regardless of whether launchAtStartup actually changed
   refreshTrayMenu();
+  broadcastStatus(); // a full-reset save (see settings.js's "전체 설정 초기화") also resets paused/오늘-하루-끄기 - keep the settings window's own quick-controls toggles from going stale
   // No more position-based repositioning here - the old 4-corner 'position'
   // setting this handler used to snap the window to on every save is gone
   // (see settingsStore.js). pet.js's own 'settings-updated' handler reacts
@@ -676,3 +681,219 @@ ipcMain.on('pace-move', (event, deltaX) => {
   // the only side that actually knows where the screen edges are.
   if (hitSide) win.webContents.send('pace-hit-edge', hitSide);
 });
+
+// ---------------------------------------------------------------------
+// Quick controls ("트레이 메뉴 전용 기능들을 설정 페이지에서도 조작 가능하게")
+// - the tray menu's pause/resume, show/hide, and "test now" actions are now
+// also reachable from the settings window (see windows/settings/settings.js's
+// own "빠른 제어" card), routed through the SAME shared functions below so
+// there's exactly one place that actually flips each piece of state -
+// whichever side (a tray click or a settings-window toggle) triggers a
+// change, both refreshTrayMenu() (rebuilds the tray's own labels) and
+// broadcastStatus() (pushes the same status to the settings window, if it's
+// currently open) run afterward, so the two surfaces can never drift out of
+// sync with each other.
+// ---------------------------------------------------------------------
+
+function todayDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isOffForToday() {
+  return !!settings.offForTodayDate && settings.offForTodayDate === todayDateString();
+}
+
+// Clears a stale "오늘 하루 알림 끄기" flag left over from a previous day.
+// Deliberately NOT a setTimeout(msUntilMidnight) - a scheduled timer like
+// that is easy to miss/mistime across a laptop sleeping through midnight
+// (a timer's delay is wall-clock-ish but not guaranteed to fire exactly on
+// schedule across a system sleep/wake), so instead this is checked
+// opportunistically - self-corrects the next time ANYTHING asks (a
+// reminder attempt via sendReminderMessage, or this file's own
+// always-on-top poll below) regardless of how long the gap was, rather
+// than depending on one single scheduled event actually landing.
+function clearStaleOffForToday() {
+  if (settings.offForTodayDate && !isOffForToday()) {
+    settings.offForTodayDate = null;
+    store.save(settings);
+    broadcastStatus();
+  }
+}
+
+function getStatus() {
+  return {
+    paused: settings.paused,
+    petVisible,
+    offForToday: isOffForToday()
+  };
+}
+
+function broadcastStatus() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send('status-updated', getStatus());
+  }
+}
+
+function setPaused(paused) {
+  settings.paused = paused;
+  store.save(settings);
+  refreshTrayMenu();
+  broadcastStatus();
+}
+
+// "펫 숨기기" no longer OS-hides the window outright (the old
+// petWindow.hide()) - doing so would ALSO hide the speech bubble, which
+// lives inside this same window (see this file's own history on why the
+// bubble is embedded here again), defeating "펫을 숨긴 상태에서도 알림...
+// 말풍선만 화면에 표시". Instead the window stays OS-visible the whole
+// time; hiding just tells pet.js to stop drawing the sprite (a
+// 'pet-hidden-state' push - see pet.js's own handler, which also disables
+// its own click-through hit-testing by construction, since a hidden
+// #pet-wrap's canvas reports a zero-size bounding rect) and relocates the
+// window to the taskbar-bottom-right resting spot below, so a reminder
+// firing while hidden appears somewhere sensible instead of at the
+// invisible sprite's old position. Showing again restores the EXACT
+// pre-hide window position/local-offset (preHideState) rather than
+// recomputing a fresh edge/pace position, so the pet reappears exactly
+// where it was.
+let petVisible = true;
+let preHideState = null; // {x, y, localX} captured right before hiding, restored on show
+
+// Bug fix ("펫 표시 끄기 할 때 화면 중앙으로 순간 점멸했다가 사라짐"): the
+// window used to setBounds() to its new (centered, at the time) position
+// FIRST and only send the 'pet-hidden-state' IPC afterward - but
+// setBounds() moves the OS-level window (carrying whatever was ALREADY
+// painted in it, i.e. the still-visible sprite) immediately and
+// synchronously, while pet.js hasn't even received the IPC yet, let alone
+// applied display:none and had Chromium composite a new frame reflecting
+// it. That gap is exactly the visible "flash at the new spot, then vanish"
+// the user saw - reordering the IPC send before setBounds() wouldn't
+// reliably fix it either, since IPC delivery + the renderer's own repaint
+// are asynchronous and not actually guaranteed to land before this
+// synchronous main-process code continues. Setting opacity to 0 for the
+// ENTIRE reposition+IPC handshake sidesteps the race outright instead of
+// trying to win it with ordering: at opacity 0 nothing painted in the
+// window - old sprite, new position, anything - is visible to the user
+// regardless of exactly when the renderer catches up, and opacity is only
+// restored to 1 once pet.js confirms (see 'pet-hidden-applied' below) it
+// has actually applied the new hidden/shown state and had at least one
+// real paint reflect it. Applied symmetrically to BOTH directions (not
+// just hiding) - showing also repositions the window, and if a reminder
+// bubble happened to still be up at that exact moment, the same kind of
+// jump could otherwise be visible for it too.
+function armPetHiddenOpacityRestore() {
+  let settled = false;
+  const restore = () => {
+    if (settled) return;
+    settled = true;
+    ipcMain.removeListener('pet-hidden-applied', onAck);
+    if (petWindow && !petWindow.isDestroyed()) petWindow.setOpacity(1);
+  };
+  const onAck = () => restore();
+  ipcMain.once('pet-hidden-applied', onAck);
+  // Safety net - if the renderer never acks (e.g. mid-reload), don't leave
+  // the window stuck invisible forever. 300ms is generous next to what
+  // pet.js's own double-requestAnimationFrame actually needs (at most ~2
+  // frames, ~33ms) - this should essentially never be the one that
+  // actually fires in practice.
+  setTimeout(restore, 300);
+}
+
+function setPetVisible(visible) {
+  if (visible === petVisible) return;
+  petVisible = visible;
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.setOpacity(0); // see armPetHiddenOpacityRestore's own comment
+    if (!visible) {
+      const bounds = petWindow.getBounds();
+      preHideState = { x: bounds.x, y: bounds.y, localX: currentSpriteLocalX };
+      // A hide triggered mid-drag/mid-drop-animation (unlikely, but this is
+      // reachable from the tray/settings window at any moment, not just
+      // via pet.js's own drag flow) would otherwise leave one of these
+      // timers fighting the new position on the very next tick.
+      if (dragPollTimer) { clearInterval(dragPollTimer); dragPollTimer = null; }
+      if (dropTimer) { clearInterval(dropTimer); dropTimer = null; }
+      paceFloatX = null;
+      const display = screen.getPrimaryDisplay();
+      // "우측 하단으로 고정": anchors the (now invisible) sprite at its
+      // normal RIGHT-edge resting spot (same edgeSpriteX every drag/pace
+      // turnaround already uses) rather than screen-center, so a reminder
+      // bubble firing while hidden clusters near the taskbar's bottom-right
+      // corner regardless of where the pet happened to be right before it
+      // was hidden - Y is already always groundWindowY (taskbar-anchored)
+      // either way, so right+ground together read as "우측 하단". See
+      // pet.js's positionBubble/HIDDEN_BUBBLE_BOTTOM for the other half of
+      // "가깝게" - how close the bubble itself sits to that corner
+      // vertically.
+      const layout = spriteWindowLayout(edgeSpriteX('right', display), display);
+      petWindow.setBounds({ x: layout.winX, y: groundWindowY(display), width: PET_SIZE.width, height: PET_SIZE.height });
+      pushSpriteLocalX(petWindow, layout.localX);
+    } else if (preHideState) {
+      petWindow.setBounds({ x: preHideState.x, y: preHideState.y, width: PET_SIZE.width, height: PET_SIZE.height });
+      pushSpriteLocalX(petWindow, preHideState.localX);
+      preHideState = null;
+    }
+    petWindow.webContents.send('pet-hidden-state', { hidden: !visible });
+    armPetHiddenOpacityRestore();
+  }
+  refreshTrayMenu();
+  broadcastStatus();
+}
+
+// Shared by both the regular timer-driven reminder (fireReminder above) and
+// the 10-minute snooze timeout below - the actual "is it OK to show a
+// reminder right now" gate (paused, and now also "오늘 하루 끄기") lives in
+// exactly ONE place so a snoozed reminder can't bypass either. Deliberately
+// unaffected by petVisible - reminders keep firing/showing (as a bubble
+// only, see pet.js's own petHidden handling) regardless of whether the pet
+// sprite itself is currently hidden.
+function sendReminderMessage(message) {
+  clearStaleOffForToday();
+  if (settings.paused || isOffForToday()) return;
+  if (petWindow) {
+    petWindow.webContents.send('reminder', {
+      message,
+      soundEnabled: settings.soundEnabled,
+      soundVolume: settings.soundVolume
+    });
+  }
+}
+
+// "10분 뒤 다시" snooze button (see pet.js's bubble markup/click handler) -
+// dismisses the current bubble immediately on the renderer side and asks
+// here for a one-off re-fire of the SAME message 10 minutes later. Not
+// tracked/cancellable (no UI was requested for "undo a snooze") - a stray
+// setTimeout is harmless overhead for the 10 minutes it's pending, and
+// naturally never fires if the app quits before then.
+const SNOOZE_MS = 10 * 60 * 1000;
+ipcMain.on('snooze-reminder', (event, message) => {
+  const msg = String(message || '').trim();
+  if (!msg) return;
+  setTimeout(() => sendReminderMessage(msg), SNOOZE_MS);
+});
+
+// Windows 시작 시 자동 실행 - (re)applied on every launch (in case the
+// setting was ever changed while the OS's own startup-apps list was edited
+// directly, or this is a first install with the field still at its
+// DEFAULTS value) and again whenever the settings window saves a changed
+// value (see the 'save-settings' handler above).
+function applyLoginItemSettings() {
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!settings.launchAtStartup });
+  } catch (e) {
+    // Not fatal - just means the OS didn't register/unregister the startup
+    // entry this time; the checkbox itself still reflects what the user
+    // asked for, and this is retried on every future save/launch anyway.
+  }
+}
+
+ipcMain.handle('get-status', () => getStatus());
+ipcMain.on('toggle-paused', () => setPaused(!settings.paused));
+ipcMain.on('toggle-pet-visible', () => setPetVisible(!petVisible));
+ipcMain.on('toggle-off-today', () => {
+  settings.offForTodayDate = isOffForToday() ? null : todayDateString();
+  store.save(settings);
+  broadcastStatus();
+});
+ipcMain.on('fire-reminder-now', () => fireReminder());

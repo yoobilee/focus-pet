@@ -15,6 +15,39 @@
   </header>
 
   <main>
+    <!-- Settings-window equivalents of the tray menu's own quick actions
+         (pause/resume, show/hide, "test now") plus "오늘 하루 알림 끄기" -
+         see main.js's setPaused/setPetVisible/getStatus/broadcastStatus for
+         how these two surfaces (this card and the tray menu) always stay in
+         sync with each other regardless of which one triggers a change. -->
+    <section class="card">
+      <label class="section-title">빠른 제어</label>
+      <div class="quick-controls-list">
+        <label class="toggle-row">
+          <span class="toggle-row-label">알림 일시정지</span>
+          <span class="toggle">
+            <input type="checkbox" id="quickPaused" />
+            <span class="toggle-track"></span>
+          </span>
+        </label>
+        <label class="toggle-row">
+          <span class="toggle-row-label">펫 표시</span>
+          <span class="toggle">
+            <input type="checkbox" id="quickPetVisible" />
+            <span class="toggle-track"></span>
+          </span>
+        </label>
+        <label class="toggle-row">
+          <span class="toggle-row-label">오늘 하루 알림 끄기</span>
+          <span class="toggle">
+            <input type="checkbox" id="quickOffToday" />
+            <span class="toggle-track"></span>
+          </span>
+        </label>
+      </div>
+      <button type="button" id="quickTestNow" class="secondary quick-test-btn">지금 바로 알림 테스트</button>
+    </section>
+
     <section class="card">
       <label class="section-title">캐릭터</label>
       <div id="char-grid" class="char-grid"></div>
@@ -91,6 +124,17 @@
     </section>
 
     <section class="card">
+      <label class="section-title">일반</label>
+      <label class="toggle-row">
+        <span class="toggle-row-label">Windows 시작 시 자동 실행</span>
+        <span class="toggle">
+          <input type="checkbox" id="launchAtStartup" />
+          <span class="toggle-track"></span>
+        </span>
+      </label>
+    </section>
+
+    <section class="card">
       <label class="section-title">알림 메시지</label>
       <span class="section-hint">한 줄에 하나씩 입력하세요</span>
       <textarea id="messages" rows="5" placeholder="비워두면 기본 유머 대사가 자동으로 사용돼요"></textarea>
@@ -98,8 +142,21 @@
   </main>
 
   <footer>
-    <button id="resetBtn" class="secondary">기본값으로</button>
-    <button id="saveBtn" class="primary">저장</button>
+    <!-- "기본값으로 채우기"(draft-only, needs Save) vs. "전체 설정
+         초기화"(persists immediately, confirm() first) are genuinely
+         different in WHEN they take effect, not just two buttons doing the
+         same reset - this caption + the button labels themselves spell
+         that difference out so it's not something you only discover by
+         hovering (title attrs below add the fuller explanation on hover,
+         but shouldn't be the only place it's stated). -->
+    <p class="footer-hint">기본값으로 채우기는 저장을 눌러야 적용돼요 · 전체 설정 초기화는 확인 후 바로 저장까지 끝나요</p>
+    <div class="footer-row">
+      <button id="resetAllBtn" type="button" class="danger-link" title="확인 후 모든 설정을 즉시 기본값으로 되돌리고 저장까지 끝내요 (되돌릴 수 없어요)">전체 설정 초기화</button>
+      <div class="footer-actions">
+        <button id="resetBtn" class="secondary" title="폼에 기본값을 채워 넣을 뿐, 저장을 눌러야 실제로 적용돼요">기본값으로 채우기</button>
+        <button id="saveBtn" class="primary">저장</button>
+      </div>
+    </div>
   </footer>
 
   <script type="module" src="settings.js"></script>

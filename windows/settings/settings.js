@@ -11,8 +11,23 @@ const soundCheckbox = document.getElementById('soundEnabled');
 const soundVolumeInput = document.getElementById('soundVolume');
 const soundVolumeLabel = document.getElementById('soundVolumeLabel');
 const messagesTextarea = document.getElementById('messages');
+const launchAtStartupCheckbox = document.getElementById('launchAtStartup');
 const saveBtn = document.getElementById('saveBtn');
 const resetBtn = document.getElementById('resetBtn');
+const resetAllBtn = document.getElementById('resetAllBtn');
+
+// "빠른 제어" card - settings-window mirrors of the tray menu's own
+// pause/resume, show/hide, and "test now" actions, plus "오늘 하루 알림
+// 끄기" (tray-menu-only, no tray equivalent needed the other way). These
+// three toggles reflect LIVE app state (main.js's settings.paused/
+// petVisible/offForTodayDate), not draft form state - they act immediately
+// on change (no Save needed) and stay in sync with the tray via
+// getStatus()/onStatusUpdated below, same as the tray menu's own labels do
+// via main.js's broadcastStatus().
+const quickPausedToggle = document.getElementById('quickPaused');
+const quickPetVisibleToggle = document.getElementById('quickPetVisible');
+const quickOffTodayToggle = document.getElementById('quickOffToday');
+const quickTestNowBtn = document.getElementById('quickTestNow');
 
 let currentCharacter = 'cat_a';
 // Populated once from getDefaults() in init() before fillForm() ever runs -
@@ -139,6 +154,17 @@ function updateVolumeFill() {
   soundVolumeInput.style.setProperty('--fill', `${pct}%`);
 }
 
+// Fills the "빠른 제어" toggles from main.js's getStatus()/status-updated
+// shape ({paused, petVisible, offForToday}) - kept entirely separate from
+// fillForm()/settingsStore.js's `settings` object, since this reflects
+// live main-process state (some of which, like petVisible, isn't even
+// persisted to settings.json) rather than the draft form.
+function fillStatus(status) {
+  quickPausedToggle.checked = status.paused;
+  quickPetVisibleToggle.checked = status.petVisible;
+  quickOffTodayToggle.checked = status.offForToday;
+}
+
 function updateModeVisibility() {
   const mode = document.querySelector('input[name="mode"]:checked')?.value || 'interval';
   intervalSection.classList.toggle('hidden', mode === 'idle');
@@ -168,6 +194,7 @@ function fillForm(settings) {
   soundVolumeInput.value = volumePercent;
   soundVolumeLabel.textContent = `소리 크기 (${volumePercent}%)`;
   updateVolumeFill();
+  launchAtStartupCheckbox.checked = !!settings.launchAtStartup;
   // The textarea is meant to be "write your own custom lines here", not a
   // display of whatever list is currently in effect - settingsStore.js's
   // load() always returns SOME messages array (falls back to
@@ -202,9 +229,14 @@ async function init() {
   // once cachedDefaultMessages is already populated - isDefaultMessages()
   // needs it to tell "just inherited defaults" apart from "real custom
   // list" correctly on the very first render.
-  const [defaults, settings] = await Promise.all([window.focusPetAPI.getDefaults(), window.focusPetAPI.getSettings()]);
+  const [defaults, settings, status] = await Promise.all([
+    window.focusPetAPI.getDefaults(),
+    window.focusPetAPI.getSettings(),
+    window.focusPetAPI.getStatus()
+  ]);
   cachedDefaultMessages = defaults.messages;
   fillForm(settings);
+  fillStatus(status);
 
   document.querySelectorAll('input[name="mode"]').forEach((r) => {
     r.addEventListener('change', updateModeVisibility);
@@ -213,6 +245,18 @@ async function init() {
     soundVolumeLabel.textContent = `소리 크기 (${soundVolumeInput.value}%)`;
     updateVolumeFill();
   });
+
+  // Quick-control toggles act immediately (no Save needed) - each just
+  // asks main.js to flip the corresponding live state; main.js's own
+  // broadcastStatus() (fired after every change, from whichever side
+  // triggered it - tray or here) pushes the result back via
+  // onStatusUpdated below, so this listener doesn't need to optimistically
+  // update fillStatus() itself.
+  quickPausedToggle.addEventListener('change', () => window.focusPetAPI.togglePaused());
+  quickPetVisibleToggle.addEventListener('change', () => window.focusPetAPI.togglePetVisible());
+  quickOffTodayToggle.addEventListener('change', () => window.focusPetAPI.toggleOffToday());
+  quickTestNowBtn.addEventListener('click', () => window.focusPetAPI.fireReminderNow());
+  window.focusPetAPI.onStatusUpdated((status) => fillStatus(status));
 }
 
 saveBtn.addEventListener('click', async () => {
@@ -233,6 +277,7 @@ saveBtn.addEventListener('click', async () => {
     movementMode,
     soundEnabled: soundCheckbox.checked,
     soundVolume: Number(soundVolumeInput.value) / 100,
+    launchAtStartup: launchAtStartupCheckbox.checked,
     messages: messages.length ? messages : undefined
   };
 
@@ -240,13 +285,43 @@ saveBtn.addEventListener('click', async () => {
   window.focusPetAPI.closeSettings();
 });
 
+// "기본값으로 채우기" - only refills the DRAFT form (see resetAllBtn below
+// for the button that actually persists immediately); nothing here is
+// saved until the user separately clicks 저장, and closing the window
+// without saving discards it entirely (settingsWindow's own 'closed'
+// handler re-sends the last actually-saved settings either way).
 resetBtn.addEventListener('click', async () => {
   const defaults = await window.focusPetAPI.getDefaults();
   fillForm(defaults);
-  // Same live-preview courtesy the char-grid click handler gives - "기본값
-  //으로" changes the character selection too, so preview that immediately
+  // Same live-preview courtesy the char-grid click handler gives - this
+  // changes the character selection too, so preview that immediately
   // rather than leaving the pet window showing the old pick until Save.
   window.focusPetAPI.previewCharacter(defaults.character);
+});
+
+// "전체 설정 초기화" - unlike resetBtn above (which only refills the DRAFT
+// form, requiring a subsequent Save to actually take effect), this
+// immediately persists store.DEFAULTS as-is via the existing saveSettings()
+// API - settingsStore.js's load() already merges {...DEFAULTS, ...parsed},
+// so calling saveSettings(defaults) with the full defaults object IS a
+// complete reset, no separate main.js/preload.js plumbing needed for this
+// specific feature. Destructive/irreversible (wipes any custom messages,
+// etc.) - gated behind a native confirm() rather than firing on a single
+// click.
+resetAllBtn.addEventListener('click', async () => {
+  const confirmed = confirm('모든 설정을 초기값으로 되돌릴까요?\n저장한 메시지 등 직접 바꾼 내용이 모두 사라집니다.');
+  if (!confirmed) return;
+  const defaults = await window.focusPetAPI.getDefaults();
+  await window.focusPetAPI.saveSettings(defaults);
+  fillForm(defaults);
+  window.focusPetAPI.previewCharacter(defaults.character);
+  // save-settings resets paused/오늘-하루-끄기 too (defaults.paused=false,
+  // offForTodayDate=null) - main.js's own handler already broadcasts this
+  // via broadcastStatus(), but fetch+fill directly here too so the "빠른
+  // 제어" toggles update in the very same tick as the rest of the form,
+  // rather than depending on that IPC round trip landing first.
+  const status = await window.focusPetAPI.getStatus();
+  fillStatus(status);
 });
 
 init();
